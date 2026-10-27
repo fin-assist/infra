@@ -105,6 +105,13 @@ class ValidationTests(unittest.TestCase):
 
 
 class DeploymentTests(unittest.TestCase):
+    def setUp(self):
+        self.runtime = tempfile.TemporaryDirectory()
+        self.override = patch.object(stage, "MIGRATION_OVERRIDE_ROOT", Path(self.runtime.name))
+        self.override.start()
+        self.addCleanup(self.override.stop)
+        self.addCleanup(self.runtime.cleanup)
+
     def test_migration_before_restart_and_executable_install(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -113,9 +120,8 @@ class DeploymentTests(unittest.TestCase):
             calls = []
             with patch.object(stage, "run", side_effect=lambda args: calls.append(args)):
                 stage.deploy("user", pin, directory, install)
-            self.assertEqual(calls[0], ["systemctl", "start", "user-migrate.service"])
-            self.assertEqual(calls[1], ["systemctl", "restart", "user.service"])
-            self.assertIn("/readyz", calls[2][-1])
+            self.assertEqual(calls[:4], [["systemctl", "daemon-reload"], ["systemctl", "start", "user-migrate.service"], ["systemctl", "daemon-reload"], ["systemctl", "restart", "user.service"]])
+            self.assertIn("/readyz", calls[4][-1])
             self.assertEqual((install / "user/user").stat().st_mode & 0o777, 0o755)
 
     def test_health_failure_restores_previous_binary_without_down_migration(self):
@@ -138,7 +144,7 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(calls[-1], ["systemctl", "restart", "user.service"])
             self.assertFalse(any("down" in call for call in calls))
 
-    def test_failed_first_migration_stops_and_unselects_release(self):
+    def test_failed_first_migration_never_selects_or_starts_release(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             pin, directory = fixture(root)
@@ -150,9 +156,78 @@ class DeploymentTests(unittest.TestCase):
             with patch.object(stage, "run", side_effect=run):
                 with self.assertRaisesRegex(RuntimeError, "migration failure"):
                     stage.deploy("user", pin, directory, root / "opt")
-            self.assertEqual(calls[-1], ["systemctl", "stop", "user.service"])
+            self.assertEqual(calls[-1], ["systemctl", "daemon-reload"])
             self.assertFalse((root / "opt/user").is_symlink())
             self.assertFalse(any(c[1] == "restart" for c in calls))
+
+    def test_migration_uses_immutable_path_and_keeps_automatic_restart_on_old_binary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pin, directory = fixture(root)
+            install = root / "opt"
+            previous = install / "releases/user" / ("b" * 40)
+            previous.mkdir(parents=True)
+            (install / "user").symlink_to(previous)
+            observed = []
+            def run(args):
+                if args == ["systemctl", "start", "user-migrate.service"]:
+                    self.assertEqual((install / "user").resolve(), previous.resolve())
+                    text = (stage.MIGRATION_OVERRIDE_ROOT / "user-migrate.service.d/release.conf").read_text()
+                    self.assertIn(str((install / "releases/user" / pin["sha"] / "user").resolve()), text)
+                    observed.append(True)
+                if args == ["systemctl", "restart", "user.service"]:
+                    self.assertEqual((install / "user").resolve().name, pin["sha"])
+            with patch.object(stage, "run", side_effect=run):
+                stage.deploy("user", pin, directory, install)
+            self.assertEqual(observed, [True])
+            self.assertFalse((stage.MIGRATION_OVERRIDE_ROOT / "user-migrate.service.d/release.conf").exists())
+
+    def test_symlink_managed_parents_refused_before_writing(self):
+        for parent in ("releases", "releases/user"):
+            with self.subTest(parent=parent), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                pin, directory = fixture(root)
+                install = root / "opt"
+                (install / parent).parent.mkdir(parents=True, exist_ok=True)
+                outside = root / "outside"
+                outside.mkdir()
+                (install / parent).symlink_to(outside)
+                with patch.object(stage, "run") as command:
+                    with self.assertRaisesRegex(ValueError, "symlink"):
+                        stage.deploy("user", pin, directory, install)
+                    command.assert_not_called()
+                self.assertEqual(list(outside.iterdir()), [])
+
+    def test_first_health_failure_and_failed_stop_still_unselects_release(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pin, directory = fixture(root)
+            def run(args):
+                if args[0] == "curl":
+                    raise RuntimeError("primary health failure")
+                if args[1] == "stop":
+                    raise RuntimeError("secondary stop failure")
+            with patch.object(stage, "run", side_effect=run), patch("sys.stderr") as stderr:
+                with self.assertRaisesRegex(RuntimeError, "primary health failure"):
+                    stage.deploy("user", pin, directory, root / "opt")
+            self.assertFalse((root / "opt/user").is_symlink())
+            self.assertTrue(stderr.write.called)
+
+    def test_migration_error_survives_failed_reload_cleanup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pin, directory = fixture(root)
+            calls = []
+            def run(args):
+                calls.append(args)
+                if args[1] == "start":
+                    raise RuntimeError("primary migration failure")
+                if args[1] == "daemon-reload" and len(calls) > 1:
+                    raise RuntimeError("secondary reload failure")
+            with patch.object(stage, "run", side_effect=run), patch("sys.stderr"):
+                with self.assertRaisesRegex(RuntimeError, "primary migration failure"):
+                    stage.deploy("user", pin, directory, root / "opt")
+            self.assertFalse((root / "opt/user").is_symlink())
 
     def test_bff_has_no_migration_and_old_directory_not_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:

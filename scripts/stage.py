@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 SERVICES = ("user", "bank-statement-data", "analytics", "assistant", "bank-bff", "fake-llm")
@@ -107,12 +108,50 @@ def atomic_link(path, target):
     temporary.replace(path)
 
 
+MIGRATION_OVERRIDE_ROOT = Path("/run/systemd/system")
+
+
+def managed_directory(root, *parts):
+    """Reject symlinks before following any managed writable directory."""
+    if root.is_symlink():
+        raise ValueError("managed root must not be a symlink")
+    root.mkdir(parents=True, exist_ok=True)
+    current = root.resolve()
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError("managed directory must not be a symlink")
+        current.mkdir(exist_ok=True)
+    return current
+
+
+def migrate(service, target):
+    """Use the new immutable executable while automatic restarts still select the old one."""
+    directory = managed_directory(MIGRATION_OVERRIDE_ROOT, service + "-migrate.service.d")
+    override = directory / "release.conf"
+    # Never overwrite an operator override or a stale interrupted migration selection.
+    with override.open("x") as stream:
+        stream.write(f"[Service]\nExecStart=\nExecStart={target / service} migrate up\n")
+    try:
+        run(["systemctl", "daemon-reload"])
+        run(["systemctl", "start", service + "-migrate.service"])
+    except BaseException:
+        try:
+            override.unlink()
+            run(["systemctl", "daemon-reload"])
+        except Exception as cleanup_error:
+            print(f"migration override cleanup failed: {cleanup_error}", file=sys.stderr)
+        raise
+    else:
+        override.unlink()
+        run(["systemctl", "daemon-reload"])
+
+
 def deploy(service, pin, directory, root=Path("/opt/finassist")):
     """Install a verified immutable release; never downgrade or roll back the database."""
     manifest = verify_artifact(service, pin, directory)
-    root = root.resolve()
-    releases = root / "releases" / service
-    releases.mkdir(parents=True, exist_ok=True)
+    root = managed_directory(root)
+    releases = managed_directory(root, "releases", service)
     target = releases / pin["sha"]
     current = root / service
     if current.exists() and not current.is_symlink():
@@ -131,12 +170,14 @@ def deploy(service, pin, directory, root=Path("/opt/finassist")):
     else:
         if target.is_symlink() or not target.is_dir():
             raise ValueError("existing release is not a regular directory")
+        if (target / service).is_symlink() or not (target / service).is_file():
+            raise ValueError("installed binary must be a regular file")
         if hashlib.sha256((target / service).read_bytes()).hexdigest() != manifest["binary_sha256"]:
             raise ValueError("immutable release checksum mismatch")
+    if service not in ("bank-bff", "fake-llm"):
+        migrate(service, target)
     atomic_link(current, target)
     try:
-        if service not in ("bank-bff", "fake-llm"):
-            run(["systemctl", "start", service + "-migrate.service"])
         run(["systemctl", "restart", service + ".service"])
         # curl retries are bounded and do not print response bodies or credentials.
         if service in HEALTH:
@@ -148,15 +189,18 @@ def deploy(service, pin, directory, root=Path("/opt/finassist")):
     except Exception:
         if previous is not None:
             atomic_link(current, previous)
-            run(["systemctl", "restart", service + ".service"])
+            cleanup_command = ["systemctl", "restart", service + ".service"]
         else:
-            # A failed first deployment must not remain active or be selected on reboot.
-            run(["systemctl", "stop", service + ".service"])
+            # Remove the selection before stop: even a failed stop cannot select this release again.
             current.unlink()
+            cleanup_command = ["systemctl", "stop", service + ".service"]
+        try:
+            run(cleanup_command)
+        except Exception as cleanup_error:
+            print(f"rollback service operation failed: {cleanup_error}", file=sys.stderr)
         raise
     if previous is not None and previous != target:
-        history = root / "previous"
-        history.mkdir(exist_ok=True)
+        history = managed_directory(root, "previous")
         atomic_link(history / service, previous)
 
 
