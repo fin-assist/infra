@@ -17,7 +17,11 @@
 [Unit]
 Description=fin-assist bank-statement-data
 After=network-online.target postgresql.service
+Requires=finassist-iam-bootstrap.service
+After=finassist-iam-bootstrap.service
 Wants=network-online.target
+# Retry crashed serve after credentials recover; an explicit stop still stays stopped.
+StartLimitIntervalSec=0
 
 [Service]
 Type=exec
@@ -46,7 +50,7 @@ Environment=HTTP_ADDR=127.0.0.1:19092
 Environment=AUTH_MODE=verify
 DynamicUser=yes
 Restart=on-failure
-RestartSec=2s
+RestartSec=30s
 MemoryHigh=512M
 MemoryMax=1G
 CPUQuota=200%

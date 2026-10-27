@@ -79,7 +79,8 @@ Object Lock выключен, нет expiration-правил, стирающих
 Точные права/приватность проверить на реальном бакете и записать результат без токенов.
 
 IAM-токен обновляется **вне сервиса**: `scripts/refresh_iam.py` и
-`systemd/finassist-iam-refresh.service` / `.timer`. Это подготовленные файлы, на хосте они ещё не установлены.
+`systemd/finassist-iam-bootstrap.service`, `finassist-iam-refresh.service` / `.timer`.
+Это подготовленные файлы, на хосте они ещё не установлены.
 Python3 stdlib и `/usr/bin/openssl` формируют PS256 JWT на5мин из authorized JSON RSA-ключа SA;
 обмен идёт только на `https://iam.api.cloud.yandex.net/iam/v1/tokens` с системным TLS trust store,
 без proxy и redirect. [Формат JWT](https://yandex.cloud/en/docs/iam/operations/iam-token/create-for-sa)
@@ -98,20 +99,32 @@ Python3 stdlib и `/usr/bin/openssl` формируют PS256 JWT на5мин и
    `/etc/finassist/iam-refresh/authorized-key.json` (root0600, каталог root0700).
    BSD этот долгоживущий ключ не получает: oneshot читает его через LoadCredential.
    Не добавлять JSON, IAM/JWT, значения переменных или идентификаторы аккаунта в Git, Actions и отчёты.
+   **До первого deploy** установить bootstrap/refresh `.service` и `.timer`, сделать daemon-reload;
+   timer пока не включать. BSD unit требует bootstrap, поэтому нельзя копировать только BSD unit.
 2. **До первого deploy BSD** создать первичный токен, без рестарта ещё не установленного бинаря:
 
    ```sh
-   sudo install -d -m 0700 /run/finassist-iam-refresh /etc/finassist/bank-statement-data
-   sudo timeout 280 /usr/bin/python3 /opt/finassist-infra/scripts/refresh_iam.py initial
+   sudo install -d -m 0700 /etc/finassist/bank-statement-data
+   sudo systemctl start finassist-iam-bootstrap.service
    ```
 
-   `initial` только подготавливает credential; не применять к работающему BSD вместо recurring refresh.
+   Bootstrap вызывает `initial`, только подготавливает credential и не активирует BSD.
+   RemainAfterExit сохраняет успешный bootstrap до следующей загрузки, не обновляя token второй раз при deploy.
    Сначала создать первый токен, затем обычная миграция/deploy BSD и его readiness.
-3. После успешного первого deploy установить `.service` **и** `.timer`, сделать daemon-reload.
-   Проверить один управляемый цикл `systemctl start finassist-iam-refresh.service` в согласованное окно,
+3. После успешного первого deploy проверить один управляемый цикл
+   `systemctl start finassist-iam-refresh.service` в согласованное окно,
    проверить `/readyz`, затем `systemctl enable --now finassist-iam-refresh.timer`.
-   Первый таймер не запускается немедленно. Перед запуском после долгого простоя/просрочки токена
-   заново выполнить `initial` при остановленном BSD, затем запустить BSD и timer.
+   Первый таймер не запускается немедленно. При reboot (в том числе после простоя >12ч) BSD ждёт
+   `Requires`+`After` bootstrap: новый source token появляется **до** загрузки LoadCredential BSD.
+   Цикла зависимостей нет: bootstrap не требует и не запускает BSD; DB-migrate от облака не зависит.
+   При остановленном BSD recurring всё равно обновляет source token, но не активирует BSD.
+   При crash BSD повторяет serve через30с без StartLimit; после обновления token следующий старт может
+   восстановиться. Явный `systemctl stop bank-statement-data` отменяет эти автоматические рестарты.
+   Если сам bootstrap исчерпал bounded HTTP retry или не смог подписать JWT, зависимый BSD не стартует:
+   ошибка dependency **не** гарантирует on-failure retry BSD. После устранения причины оператор выполняет
+   `systemctl reset-failed finassist-iam-bootstrap.service bank-statement-data.service`, затем
+   `systemctl start bank-statement-data.service`; он заново потребует bootstrap. Полная автоматическая
+   реанимация после провала boot dependency не заявляется; timer обновляет файл, не обходит намеренный stop.
 4. Контролировать `systemctl list-timers finassist-iam-refresh.timer`, failed-state oneshot и безопасный
    journald; подключить failed-state к операторскому мониторингу перед автономной работой.
    Ошибка не маскируется успехом: unit возвращает ненулевой код, сообщения не содержат ключей,
@@ -120,8 +133,9 @@ Python3 stdlib и `/usr/bin/openssl` формируют PS256 JWT на5мин и
 Скрипт требует root, доверенные каталоги без writable предков/symlink и owner-only regular files;
 новый token записывается root0600 во временный файл того же каталога, fsync выполняется до atomic rename.
 Параллельные ручные/timer запуски исключены flock. При sign/HTTP/write ошибке старый token сохраняется.
-LoadCredential BSD делает неизменяемый снимок, поэтому **после** замены нужен `try-restart`:
-он допускается лишь для уже активного BSD и не поднимает остановленный сервис. Затем проверяется active-state.
+LoadCredential BSD делает неизменяемый снимок, поэтому **после** замены для изначально активного BSD
+нужен `try-restart`: он не поднимает сервис, остановленный во время обмена. Затем проверяется active-state.
+Если BSD был неактивен, файл обновлён, но никакая команда активации не исполняется.
 Если рестарт не удался, новый source token сохраняется, unit failed; другие credential-файлы не меняются.
 Health после рестарта и сквозная приёмка остаются отдельными проверками; active-state их не заменяет.
 GET настроек бакета тоже не доказывает PUT/KMS: до приёмки проверить синтетический файл и пустой
@@ -188,7 +202,8 @@ VPS/runtime эти проверки не поднимают.
 ## Источники units и правила nginx
 
 Базовые units взяты из main27.10.2026: user9081335, bank-statement-data86e64c4, analytics5894f48,
-assistant7303448, bank-bff255d0ba. В infra добавлены адреса/лимиты и oneshot-миграции; fake unit/drop-in —
+assistant7303448, bank-bff255d0ba. В infra добавлены адреса/лимиты, oneshot-миграции,
+IAM bootstrap dependency и политика рестарта BSD; fake unit/drop-in —
 из FIN-149 assistant PR51 (7edb92b). При обновлении сервисных units сверять credential/config изменения до rollout.
 Точные настройки и deployment-ограничения: README/docs/config.md/docs/import.md соответствующих сервисов.
 [nginx proxy](https://nginx.org/en/docs/http/ngx_http_proxy_module.html),

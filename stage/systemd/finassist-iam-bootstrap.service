@@ -1,0 +1,26 @@
+# FIN-149: install the verified infra checkout at /opt/finassist-infra first.
+[Unit]
+Description=Initialize stage IAM before bank-statement-data credentials are loaded
+Wants=network-online.target
+After=network-online.target
+Before=bank-statement-data.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+UMask=0077
+LoadCredential=authorized-key:/etc/finassist/iam-refresh/authorized-key.json
+ExecStart=/usr/bin/python3 /opt/finassist-infra/scripts/refresh_iam.py initial --key-file %d/authorized-key
+RuntimeDirectory=finassist-iam-refresh
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+TimeoutStartSec=280
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/etc/finassist/bank-statement-data /run/finassist-iam-refresh
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+StandardOutput=journal
+StandardError=journal

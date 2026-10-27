@@ -124,23 +124,78 @@ class IAMTests(unittest.TestCase):
         events = []
         def service(action):
             events.append((action, self.token.read_bytes()))
+            return True
         with patch.object(iam, "systemctl", side_effect=service), patch.object(iam, "exchange", return_value=b"new-token"):
             iam.refresh(self.keyfile, self.token)
         self.assertEqual(events, [("is-active", b"old-synthetic-token"), ("try-restart", b"new-token"), ("is-active", b"new-token")])
         def fail_restart(action):
             if action == "try-restart":
                 raise iam.RefreshError("bank-statement-data service operation failed")
+            return True
         with patch.object(iam, "systemctl", side_effect=fail_restart), patch.object(iam, "exchange", return_value=b"newer-token"):
             with self.assertRaises(iam.RefreshError):
                 iam.refresh(self.keyfile, self.token)
         self.assertEqual(self.token.read_bytes(), b"newer-token")
 
-    def test_stopped_service_does_not_exchange_or_replace(self):
-        with patch.object(iam, "systemctl", side_effect=iam.RefreshError("inactive")), patch.object(iam, "exchange") as network:
+    def test_expired_token_with_inactive_service_is_refreshed_without_activation(self):
+        self.token.write_bytes(b"expired-synthetic-token")
+        os.utime(self.token, (time.time() - 13 * 3600,) * 2)
+        with patch.object(iam, "systemctl", return_value=False) as service, \
+                patch.object(iam, "exchange", return_value=b"new-token") as network:
+            self.assertFalse(iam.refresh(self.keyfile, self.token))
+        network.assert_called_once()
+        service.assert_called_once_with("is-active")
+        self.assertEqual(self.token.read_bytes(), b"new-token")
+
+    def test_bootstrap_expired_source_failure_then_manual_retry_before_service_start(self):
+        self.token.write_bytes(b"expired-synthetic-token")
+        os.utime(self.token, (time.time() - 13 * 3600,) * 2)
+        exchange = iam.exchange
+        unavailable, requests = self.http_iam(status=503)
+        with patch.object(iam, "systemctl") as service, \
+                patch.object(iam, "exchange", side_effect=lambda jwt, now: exchange(jwt, now, unavailable, sleep=lambda _: None)):
+            with self.assertRaises(iam.RefreshError):
+                iam.refresh(self.keyfile, self.token, initial=True)
+        self.assertEqual(len(requests), 3)
+        self.assertEqual(self.token.read_bytes(), b"expired-synthetic-token")
+        service.assert_not_called()
+        available, _ = self.http_iam()
+        with patch.object(iam, "systemctl") as service, \
+                patch.object(iam, "exchange", side_effect=lambda jwt, now: exchange(jwt, now, available)):
+            self.assertFalse(iam.refresh(self.keyfile, self.token, initial=True))
+        self.assertEqual(self.token.read_bytes(), b"new-synthetic-token")
+        service.assert_not_called()  # Unit ordering, not bootstrap code, starts the requested BSD.
+
+    def test_bootstrap_precedes_credential_load_and_crashed_service_can_retry(self):
+        bsd = Path("stage/systemd/bank-statement-data.service").read_text()
+        bootstrap = Path("stage/systemd/finassist-iam-bootstrap.service").read_text()
+        migration = Path("stage/systemd/bank-statement-data-migrate.service").read_text()
+        self.assertIn("Requires=finassist-iam-bootstrap.service", bsd)
+        self.assertIn("After=finassist-iam-bootstrap.service", bsd)
+        self.assertIn("Before=bank-statement-data.service", bootstrap)
+        self.assertIn("RemainAfterExit=yes", bootstrap)
+        self.assertIn("refresh_iam.py initial --key-file %d/authorized-key", bootstrap)
+        self.assertNotIn("ConditionPathIsExecutable=", bootstrap)  # Initial token precedes binary install.
+        self.assertNotRegex(bootstrap, r"(?m)^(?:Requires|Wants)=bank-statement-data")
+        self.assertNotIn("finassist-iam-bootstrap", migration)  # DB migration does not depend on cloud.
+        self.assertIn("Restart=on-failure", bsd)
+        self.assertIn("RestartSec=30s", bsd)
+        self.assertIn("StartLimitIntervalSec=0", bsd)
+
+    def test_systemctl_state_and_stop_race_do_not_activate_stopped_service(self):
+        for code, expected in [(0, True), (3, False)]:
+            with patch.object(iam.subprocess, "run", return_value=subprocess.CompletedProcess([], code)):
+                self.assertIs(iam.systemctl("is-active"), expected)
+        for code in [1, 4]:
+            with patch.object(iam.subprocess, "run", return_value=subprocess.CompletedProcess([], code)):
+                with self.assertRaises(iam.RefreshError):
+                    iam.systemctl("is-active")
+        with patch.object(iam, "systemctl", side_effect=[True, True, False]) as service, \
+                patch.object(iam, "exchange", return_value=b"new-token"):
             with self.assertRaises(iam.RefreshError):
                 iam.refresh(self.keyfile, self.token)
-        network.assert_not_called()
-        self.assertEqual(self.token.read_bytes(), b"old-synthetic-token")
+        self.assertEqual([c.args[0] for c in service.call_args_list], ["is-active", "try-restart", "is-active"])
+        self.assertEqual(self.token.read_bytes(), b"new-token")
 
     def test_http_failure_redirect_and_retry_leave_old_token(self):
         for status, redirect in [(403, False), (503, False), (200, True)]:

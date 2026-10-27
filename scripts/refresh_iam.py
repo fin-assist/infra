@@ -185,8 +185,13 @@ def replace_token(path, token):
 
 def systemctl(action):
     try:
-        subprocess.run(["/usr/bin/systemctl", action, "--quiet", SERVICE], check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        result = subprocess.run(["/usr/bin/systemctl", action, "--quiet", SERVICE], check=False,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        if action == "is-active" and result.returncode == 3:
+            return False
+        if result.returncode != 0:
+            raise RefreshError("bank-statement-data service operation failed")
+        return True
     except (OSError, subprocess.SubprocessError):
         raise RefreshError("bank-statement-data service operation failed") from None
 
@@ -208,15 +213,16 @@ def lock(path):
 
 
 def refresh(key_file, token_file, initial=False):
-    if not initial:
-        systemctl("is-active")  # Do not bootstrap an undeployed or stopped service.
+    was_active = not initial and systemctl("is-active")
     now = time.time()
     token = exchange(signed_jwt(read_key(key_file), now), now)
     replace_token(token_file, token)
-    if not initial:
+    if was_active:
         # Unlike restart, try-restart cannot start a service stopped during the exchange.
         systemctl("try-restart")
-        systemctl("is-active")
+        if not systemctl("is-active"):
+            raise RefreshError("bank-statement-data service operation failed")
+    return bool(was_active)
 
 
 def main():
@@ -228,7 +234,7 @@ def main():
         if os.geteuid() != 0:
             raise RefreshError("IAM refresh requires root")
         with lock(Path("/run/finassist-iam-refresh/refresh.lock")):
-            refresh(args.key_file, Path("/etc/finassist/bank-statement-data/object-storage-iam"), initial=args.mode == "initial")
+            restarted = refresh(args.key_file, Path("/etc/finassist/bank-statement-data/object-storage-iam"), initial=args.mode == "initial")
     except RefreshError as error:
         print(str(error), file=sys.stderr)
         return 1
@@ -236,7 +242,9 @@ def main():
         # File/HTTP/crypto exceptions may contain credential bytes, response bodies or paths.
         print("IAM refresh failed", file=sys.stderr)
         return 1
-    print("IAM credential initialized" if args.mode == "initial" else "IAM credential refreshed and service restarted")
+    print("IAM credential initialized" if args.mode == "initial" else
+          "IAM credential refreshed and service restarted" if restarted else
+          "IAM credential refreshed; service remains inactive")
     return 0
 
 
