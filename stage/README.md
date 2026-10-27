@@ -1,7 +1,8 @@
 # Один VPS для stage (FIN-149)
 
-**Состояние:** подготовка. 27.10.2026 владелец сообщил, что VPS готов; данные подключения ожидаются.
-Пока не проверены адрес/домен, установленный PostgreSQL, бакет, ключи и результаты выкладки.
+**Состояние:** подготовка. SSH-доступ к VPS проверен 27.10.2026, изменений на хосте не было.
+Параметры подключения, выбранный домен и результаты осмотра сохраняются локально; здесь остаётся типовая конфигурация.
+Бакет, ключи и фактическая выкладка пока не настроены и не проверены.
 Примеры не являются production-конфигурацией и не подтверждают функциональную готовность FIN-354.
 
 Stage: systemd, nginx, один PostgreSQL18 с четырьмя базами/ролями, пять реальных сервисов,
@@ -56,7 +57,7 @@ BFF доверяет только 127.0.0.1/32. При добавлении вн
    Миграции не исполняются для stateless BFF и fake-llm.
 6. Подключить fake-llm.service и assistant.service.d/fake-llm.conf из исправления FIN-149 assistant.
    Требуется непустой **синтетический** /etc/finassist/assistant/fake-model-key (root0600).
-   ENV=stage и AUTH_MODE=verify сохраняются. Ни dev-токены, ни reflection на stage не включать.
+   ENV=stage и AUTH_MODE=verify сохраняются. Ни dev-токены, ни reflection на stage не включать. Drop-in использует Wants+After: отказ/остановка фейка не должны останавливать историю, лимит и purge всего assistant.
    user PHONE_PROVIDER=fake принимает только синтетические номера; платный провайдер не вызывается.
 7. nginx/finassist.conf установить в http context после замены stage.example.invalid и получения TLS-сертификата.
    Сначала HTTP80/ACME, затем включить TLS-конфигурацию; nginx -t до reload. Пример использует совместимый
@@ -143,7 +144,7 @@ VPS/runtime эти проверки не поднимают.
 
 Базовые units взяты из main27.10.2026: user9081335, bank-statement-data86e64c4, analytics5894f48,
 assistant7303448, bank-bff255d0ba. В infra добавлены адреса/лимиты и oneshot-миграции; fake unit/drop-in —
-из FIN-149 assistant. При обновлении сервисных units сверять credential/config изменения до rollout.
+из FIN-149 assistant PR51 (7edb92b). При обновлении сервисных units сверять credential/config изменения до rollout.
 Точные настройки и deployment-ограничения: README/docs/config.md/docs/import.md соответствующих сервисов.
 [nginx proxy](https://nginx.org/en/docs/http/ngx_http_proxy_module.html),
 [HTTP/2](https://nginx.org/en/docs/http/ngx_http_v2_module.html).

@@ -50,6 +50,12 @@ class ConfigurationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     module.check("user", file)
 
+    def test_optional_model_failure_cannot_stop_assistant(self):
+        text = Path("stage/systemd/assistant.service.d/fake-llm.conf").read_text()
+        self.assertIn("Wants=fake-llm.service", text)
+        self.assertIn("After=fake-llm.service", text)
+        self.assertNotRegex(text, r"(?m)^(?:Requires|BindsTo)=.*fake-llm")
+
     def test_nginx_covers_all_sse_and_upload_envelope(self):
         text = Path("stage/nginx/finassist.conf").read_text()
         self.assertEqual(text.count("proxy_buffering off;"), 3)
