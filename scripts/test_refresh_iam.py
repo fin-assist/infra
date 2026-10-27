@@ -175,7 +175,7 @@ class IAMTests(unittest.TestCase):
         self.assertIn("Before=bank-statement-data.service", bootstrap)
         self.assertIn("RemainAfterExit=yes", bootstrap)
         self.assertIn("refresh_iam.py initial --key-file %d/authorized-key", bootstrap)
-        self.assertNotIn("ConditionPathIsExecutable=", bootstrap)  # Initial token precedes binary install.
+        self.assertNotIn("ConditionFileIsExecutable=", bootstrap)  # Initial token precedes binary install.
         self.assertNotRegex(bootstrap, r"(?m)^(?:Requires|Wants)=bank-statement-data")
         self.assertNotIn("finassist-iam-bootstrap", migration)  # DB migration does not depend on cloud.
         self.assertIn("Restart=on-failure", bsd)
@@ -318,7 +318,7 @@ class IAMTests(unittest.TestCase):
         self.assertIn("OnUnitActiveSec=4h", timer)
         self.assertGreaterEqual(iam.MIN_VALIDITY, 5 * 3600)
         service = Path("stage/systemd/finassist-iam-refresh.service").read_text()
-        self.assertIn("ConditionPathIsExecutable=/opt/finassist/bank-statement-data/bank-statement-data", service)
+        self.assertIn("ConditionFileIsExecutable=/opt/finassist/bank-statement-data/bank-statement-data", service)
         self.assertIn("RuntimeDirectoryPreserve=yes", service)
         with patch.object(iam.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as command:
             iam.systemctl("try-restart")

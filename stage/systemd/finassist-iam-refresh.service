@@ -3,7 +3,7 @@
 Description=Refresh stage Object Storage IAM credential
 Wants=network-online.target
 After=network-online.target
-ConditionPathIsExecutable=/opt/finassist/bank-statement-data/bank-statement-data
+ConditionFileIsExecutable=/opt/finassist/bank-statement-data/bank-statement-data
 
 [Service]
 Type=oneshot

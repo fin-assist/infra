@@ -197,6 +197,10 @@ bounded TCP readiness на127.0.0.1:8092 (до20 попыток, connect2с, п�
 Локальные Python-тесты покрывают provenance/refusals/checksum, symlink предков, immutable-путь миграции и сохранение прежней ссылки до успеха, порядок миграции/рестарта,
 неуспешный первый запуск и восстановление прежней ссылки. Linux CI проверяет nginx -t и синтаксис units
 (systemd-analyze с подставленным /usr/bin/true: исполняемые бинарные пути CI не устанавливает).
+Неизвестные key/lvalue/section в диагностике считаются ошибкой даже при exit0.
+Тот же Linux entrypoint реально выполняет `systemd-analyze condition` с directive из recurring IAM unit:
+`ConditionFileIsExecutable` проходит для executable regular file и отказывает для отсутствующего файла,
+файла без executable bit и каталога. Это проверка deployment guard, без запуска сервисов.
 VPS/runtime эти проверки не поднимают.
 
 ## Источники units и правила nginx
