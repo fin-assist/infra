@@ -1,0 +1,14 @@
+# Non-secret systemd EnvironmentFile. Replace .invalid and REPLACE_* before use.
+# Unit-owned ENV/listeners/*_FILE cannot be overridden here.
+AUTH_STAGE_ISSUER=finassist-stage
+JWT_KEY_ID=stage-user-1
+JWT_ISSUER=https://stage.example.invalid
+JWT_AUDIENCE=finassist
+PHONE_PROVIDER=fake
+AUTH_DB_MAX_CONNS=4
+OUTBOX_DB_MAX_CONNS=6
+PEER_USER_ADDR=dns:///127.0.0.1:9090
+PEER_BANK_STATEMENT_DATA_ADDR=dns:///127.0.0.1:9092
+PEER_ANALYTICS_ADDR=dns:///127.0.0.1:9093
+PEER_ASSISTANT_ADDR=dns:///127.0.0.1:9094
+DB_MAX_CONNS=8

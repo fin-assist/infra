@@ -1,0 +1,80 @@
+# FIN-149 host assembly. Source units and pinned SHAs are documented in stage/README.md.
+# Example unit for the stand (FIN-149): Go services under systemd, one PostgreSQL.
+# Install as /etc/systemd/system/<service>.service, replace "service" with the name.
+# The deploy script runs "<binary> migrate up" (same environment) before restarting the unit.
+#
+# Secrets are systemd credentials, not environment variables: they do not show up in
+# "systemctl show" or /proc/<pid>/environ.
+#   /etc/finassist/<service>/env            non-secret settings (see docs/config.md); EnvironmentFile=
+#                                           overrides Environment=, so it must not set what this unit sets
+#   /etc/finassist/<service>/db-primary-dsn DSN, mode 0600, owner root
+#   /etc/finassist/<service>/stage-signing.pem  stand signing key, mode 0600, owner root (LoadCredential)
+#   /etc/finassist/stage-public.jwks            stand public JWKS shared by all services, mode 0644
+#                                               (/etc/finassist 0755): DynamicUser reads it directly
+#   /etc/finassist/<service>/model-api-key      static AI Studio API key, not an IAM token: LoadCredential
+#                                               copies the file at start, so a replaced key needs
+#                                               "systemctl restart assistant"; mode 0600, owner root;
+#                                               only with the optional model block below
+#
+# Environment= lines use only the plain form Environment=NAME=value (no quotes, spaces or
+# backslashes) and only variables of internal/config; secrets come by LoadCredential= only, all
+# in [Service]. internal/config/stand_unit_test.go insists on it.
+[Unit]
+Description=fin-assist assistant
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/opt/finassist/assistant/assistant serve
+EnvironmentFile=/etc/finassist/assistant/env
+Environment=ENV=stage
+# SERVICE_NAME is the kid/sub of the stand signing key and must match its kid in the shared JWKS.
+Environment=SERVICE_NAME=assistant
+LoadCredential=db-primary-dsn:/etc/finassist/assistant/db-primary-dsn
+Environment=DB_PRIMARY_DSN_FILE=%d/db-primary-dsn
+# With ENV=stage and AUTH_MODE=verify (the default) service identity uses the stand key files
+# (FIN-347, docs/config.md): env must set AUTH_STAGE_ISSUER, as well as AUTH_USER_ISSUER,
+# AUTH_USER_AUDIENCE and PEER_USER_ADDR. Without these files and settings the unit does not start.
+LoadCredential=stage-signing:/etc/finassist/assistant/stage-signing.pem
+Environment=AUTH_STAGE_SIGNING_KEY_FILE=%d/stage-signing
+Environment=AUTH_STAGE_PUBLIC_KEYS_FILE=/etc/finassist/stage-public.jwks
+# Optional model block (FIN-349): without ASSISTANT_MODEL_URI generation is off and new questions
+# return UNAVAILABLE, while history and the limit work. The key file without the URI is a startup
+# error, and LoadCredential= of a missing file fails the unit, so the block stays commented until
+# the stand gets a key. To enable it, set ASSISTANT_MODEL_URI and ASSISTANT_MODEL_FOLDER_ID in env,
+# as well as PEER_BANK_STATEMENT_DATA_ADDR and PEER_ANALYTICS_ADDR, and uncomment both lines:
+#LoadCredential=model-api-key:/etc/finassist/assistant/model-api-key
+#Environment=ASSISTANT_MODEL_API_KEY_FILE=%d/model-api-key
+# ENV=prod (Kubernetes, AUTH_KUBERNETES_* and SERVICE_TOKEN_FILE) is not deployed by this unit.
+
+Environment=GRPC_ADDR=127.0.0.1:9094
+Environment=HTTP_ADDR=127.0.0.1:19094
+Environment=AUTH_MODE=verify
+DynamicUser=yes
+Restart=on-failure
+RestartSec=2s
+MemoryHigh=512M
+MemoryMax=1G
+CPUQuota=200%
+# SHUTDOWN_DELAY + SHUTDOWN_TIMEOUT (5s + 20s by default) plus a margin.
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

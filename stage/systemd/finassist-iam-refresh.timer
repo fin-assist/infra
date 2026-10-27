@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh stage IAM before expiration, with infrequent service restart
+
+[Timer]
+OnActiveSec=4h
+OnUnitActiveSec=4h
+RandomizedDelaySec=60s
+AccuracySec=30s
+Unit=finassist-iam-refresh.service
+
+[Install]
+WantedBy=timers.target

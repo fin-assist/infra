@@ -1,0 +1,27 @@
+name: Stage configuration
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python tests
+        run: timeout 120 python3 -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Check nginx configuration
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx openssl
+          sudo mkdir -p /etc/letsencrypt/live/stage.example.invalid
+          sudo openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=stage.example.invalid -keyout /etc/letsencrypt/live/stage.example.invalid/privkey.pem -out /etc/letsencrypt/live/stage.example.invalid/fullchain.pem >/dev/null 2>&1
+          sudo cp stage/nginx/finassist.conf /etc/nginx/conf.d/finassist.conf
+          sudo nginx -t
+      - name: Check systemd units
+        run: python3 scripts/check_units.py
