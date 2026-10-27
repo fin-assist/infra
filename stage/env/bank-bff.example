@@ -1,0 +1,12 @@
+# Non-secret systemd EnvironmentFile. Replace .invalid and REPLACE_* before use.
+# Unit-owned ENV/listeners/*_FILE cannot be overridden here.
+AUTH_STAGE_ISSUER=finassist-stage
+AUTH_USER_ISSUER=https://stage.example.invalid
+AUTH_USER_AUDIENCE=finassist
+USER_GRPC_ADDR=dns:///127.0.0.1:9090
+ASSISTANT_GRPC_ADDR=dns:///127.0.0.1:9094
+STATEMENTS_GRPC_ADDR=dns:///127.0.0.1:9092
+CLIENT_MIN_VERSIONS=android=0.2.5
+TRUSTED_PROXIES=127.0.0.1/32
+UPLOAD_MAX_STREAMS=2
+SSE_MAX_STREAMS=100

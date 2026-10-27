@@ -1,0 +1,68 @@
+# FIN-149 host assembly. Source units and pinned SHAs are documented in stage/README.md.
+# Example for the stand; no database or migration command is needed. ENV=stage serves the
+# public API (FIN-268): the env file must set USER_GRPC_ADDR, ASSISTANT_GRPC_ADDR, STATEMENTS_GRPC_ADDR, AUTH_USER_ISSUER,
+# AUTH_USER_AUDIENCE, CLIENT_MIN_VERSIONS and the AUTH_STAGE_* files (docs/config.md), or start fails.
+# Behind the local nginx it should set TRUSTED_PROXIES=127.0.0.1/32 so that X-Forwarded-For of
+# that nginx gives the client address; without it every client has the nginx address.
+[Unit]
+Description=fin-assist bank-bff
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/opt/finassist/bank-bff/bank-bff serve
+EnvironmentFile=/etc/finassist/bank-bff/env
+Environment=ENV=stage
+# Both listeners stay on loopback: public traffic arrives only through the local nginx with TLS,
+# the operational port (/metrics, /readyz, /healthz) is never reachable from outside the host.
+# A remote monitoring exception changes this unit (see docs/config.md) and this comment.
+# The addresses belong to this unit: EnvironmentFile overrides Environment, so the env file
+# must not set PUBLIC_ADDR or HTTP_ADDR.
+Environment=PUBLIC_ADDR=127.0.0.1:8080
+Environment=HTTP_ADDR=127.0.0.1:9091
+# Defense in depth on top of the loopback binding: only loopback traffic is allowed.
+# Requires cgroup eBPF support (otherwise systemd warns once per boot and runs unfiltered) and a
+# drop-in can reset it. On the stand, as root, check both. This unit's effective config:
+#   systemctl show bank-bff -p IPAddressAllow -p IPAddressDeny
+# must print IPAddressAllow=127.0.0.0/8 ::1/128 (localhost) and IPAddressDeny=0.0.0.0/0 ::/0
+# (any), in any order. Parent slices are merged in, so also check:
+#   systemctl show bank-bff -p Slice                      # Slice=system.slice
+#   systemctl show -p IPAddressAllow -- system.slice -.slice  # IPAddressAllow= for both
+# A probe pair on PUBLIC_ADDR, always on loopback, shows the host enforces:
+#   systemd-run --wait -q curl -sS -o /dev/null -m 3 http://127.0.0.1:8080/
+# must succeed (a 404 still exits 0 without -f) and fail with -p IPAddressDeny=any added.
+# If the control probe fails, the pair proves nothing; if the deny probe passes, eBPF is
+# missing or a slice allows the traffic. Check the binding with `ss -ltn`.
+# Outgoing gRPC calls to user and assistant on other hosts need explicit IPAddressAllow entries.
+IPAddressAllow=localhost
+IPAddressDeny=any
+LoadCredential=stage-signing:/etc/finassist/bank-bff/stage-signing.pem
+Environment=AUTH_STAGE_SIGNING_KEY_FILE=%d/stage-signing
+Environment=AUTH_STAGE_PUBLIC_KEYS_FILE=/etc/finassist/stage-public.jwks
+DynamicUser=yes
+Restart=on-failure
+RestartSec=2s
+MemoryHigh=512M
+MemoryMax=1G
+CPUQuota=200%
+# Default shutdown delay + timeout is 25s.
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

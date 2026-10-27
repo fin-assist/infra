@@ -1,0 +1,32 @@
+{
+  "user": {
+    "sha": "REPLACE_FULL_MAIN_SHA",
+    "run_id": 0,
+    "run_attempt": 1
+  },
+  "bank-statement-data": {
+    "sha": "REPLACE_FULL_MAIN_SHA",
+    "run_id": 0,
+    "run_attempt": 1
+  },
+  "analytics": {
+    "sha": "REPLACE_FULL_MAIN_SHA",
+    "run_id": 0,
+    "run_attempt": 1
+  },
+  "assistant": {
+    "sha": "REPLACE_FULL_MAIN_SHA",
+    "run_id": 0,
+    "run_attempt": 1
+  },
+  "bank-bff": {
+    "sha": "REPLACE_FULL_MAIN_SHA",
+    "run_id": 0,
+    "run_attempt": 1
+  },
+  "fake-llm": {
+    "sha": "REPLACE_FULL_MAIN_SHA",
+    "run_id": 0,
+    "run_attempt": 1
+  }
+}
