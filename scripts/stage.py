@@ -8,9 +8,11 @@ import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 
 SERVICES = ("user", "bank-statement-data", "analytics", "assistant", "bank-bff", "fake-llm")
 HEALTH = {"user": 19091, "bank-statement-data": 19092, "analytics": 19093,
@@ -20,6 +22,17 @@ HEALTH = {"user": 19091, "bank-statement-data": 19092, "analytics": 19093,
 def run(args):
     """Bound external operations; callers never pass secret material as arguments."""
     return subprocess.run(args, check=True, text=True, capture_output=True, timeout=180).stdout
+
+
+def wait_fake():
+    for attempt in range(20):
+        try:
+            with socket.create_connection(("127.0.0.1", 8092), timeout=2):
+                return
+        except OSError:
+            if attempt == 19:
+                raise ValueError("fake-llm TCP readiness failed") from None
+            time.sleep(1)
 
 
 def read_set(path):
@@ -186,6 +199,7 @@ def deploy(service, pin, directory, root=Path("/opt/finassist")):
                  f"http://127.0.0.1:{HEALTH[service]}/readyz"])
         else:
             run(["systemctl", "is-active", "--quiet", "fake-llm.service"])
+            wait_fake()
     except Exception:
         if previous is not None:
             atomic_link(current, previous)

@@ -13,7 +13,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_no_port_collisions_or_wildcard_listeners(self):
         ports = []
         for path in Path("stage/systemd").glob("*.service"):
-            if "migrate" in path.name or path.name == "fake-llm.service":
+            if "migrate" in path.name or path.name in ("fake-llm.service", "finassist-iam-refresh.service"):
                 continue
             listeners = re.findall(r"^Environment=(?:GRPC_ADDR|HTTP_ADDR|PUBLIC_ADDR)=(.*)$", path.read_text(), re.M)
             self.assertEqual(len(listeners), 2, path)

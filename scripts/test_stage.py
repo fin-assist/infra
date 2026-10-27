@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import socket
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -246,3 +247,44 @@ class DeploymentTests(unittest.TestCase):
         with patch.object(stage.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "")) as command:
             stage.run(["systemctl", "is-active", "user"])
             self.assertEqual(command.call_args.kwargs["timeout"], 180)
+
+    def test_fake_tcp_ready_waits_for_a_real_listener(self):
+        real_connect = socket.create_connection
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen(1)
+            calls = []
+            def connect(address, timeout):
+                self.assertEqual(address, ("127.0.0.1", 8092))
+                self.assertEqual(timeout, 2)
+                calls.append(address)
+                if len(calls) == 1:
+                    raise ConnectionRefusedError()
+                return real_connect(server.getsockname(), timeout=timeout)
+            with patch.object(stage.socket, "create_connection", side_effect=connect), patch.object(stage.time, "sleep") as sleep:
+                stage.wait_fake()
+            self.assertEqual(len(calls), 2)
+            sleep.assert_called_once_with(1)
+
+    def test_fake_tcp_failure_is_bounded_and_deploy_restores_previous_binary(self):
+        with patch.object(stage.socket, "create_connection", side_effect=ConnectionRefusedError()) as connect, \
+                patch.object(stage.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "TCP readiness"):
+                stage.wait_fake()
+        self.assertEqual(connect.call_count, 20)
+        self.assertEqual(sleep.call_count, 19)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pin, directory = fixture(root, "fake-llm")
+            install = root / "opt"
+            previous = install / "releases/fake-llm" / ("b" * 40)
+            previous.mkdir(parents=True)
+            (install / "fake-llm").symlink_to(previous)
+            calls = []
+            with patch.object(stage, "run", side_effect=lambda args: calls.append(args)), \
+                    patch.object(stage, "wait_fake", side_effect=ValueError("TCP readiness failed")):
+                with self.assertRaisesRegex(ValueError, "TCP readiness"):
+                    stage.deploy("fake-llm", pin, directory, install)
+            self.assertEqual(calls[:2], [["systemctl", "restart", "fake-llm.service"], ["systemctl", "is-active", "--quiet", "fake-llm.service"]])
+            self.assertEqual((install / "fake-llm").resolve(), previous.resolve())
+            self.assertEqual(calls[-1], ["systemctl", "restart", "fake-llm.service"])
