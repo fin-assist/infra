@@ -209,15 +209,55 @@ def multipart(content, filename):
 
 
 def text_field(data, name):
+    require(isinstance(data, dict), "JSON object required")
     value = data.get(name)
     require(isinstance(value, str) and bool(value), "missing string field")
     return value
 
 
 def list_field(data, name):
+    require(isinstance(data, dict), "JSON object required")
     value = data.get(name)
     require(isinstance(value, list), "missing list field")
     return value
+
+
+def object_field(data, name):
+    require(isinstance(data, dict), "JSON object required")
+    value = data.get(name)
+    require(isinstance(value, dict), "missing object field")
+    return value
+
+
+def bool_field(data, name):
+    require(isinstance(data, dict), "JSON object required")
+    value = data.get(name)
+    require(type(value) is bool, "boolean field required")
+    return value
+
+
+def int_field(data, name):
+    require(isinstance(data, dict), "JSON object required")
+    value = data.get(name)
+    require(type(value) is int, "integer field required")
+    return value
+
+
+def same_json(left, right):
+    """JSON replay identity must not equate Python's True/1 or 0.0/0."""
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(same_json(left[k], right[k]) for k in left)
+    if isinstance(left, list):
+        return len(left) == len(right) and all(same_json(a, b) for a, b in zip(left, right))
+    return left == right
+
+
+def analytics_ready(data):
+    if not bool_field(data, "has_data"):
+        return False
+    return not bool_field(object_field(data, "state"), "recalculating")
 
 
 class Suite:
@@ -255,7 +295,7 @@ class Suite:
                 "pd_consent_accepted": True, "pd_consent_version": version, "timezone": "Europe/Moscow"}
         key = str(uuid.uuid4())
         pair = c.request("POST", "/v1/auth/register", 201, body, key)
-        require(pair == c.request("POST", "/v1/auth/register", 201, body, key), "registration replay mismatch")
+        require(same_json(pair, c.request("POST", "/v1/auth/register", 201, body, key)), "registration replay mismatch")
         c.token = text_field(pair, "access_token")
         self.refresh = text_field(pair, "refresh_token")
 
@@ -271,7 +311,7 @@ class Suite:
             with alarm_budget(c.deadline):
                 pair = c.request("POST", "/v1/auth/token", body=body, key=key)
                 c.remaining()
-                require(pair == c.request("POST", "/v1/auth/token", body=body, key=key),
+                require(same_json(pair, c.request("POST", "/v1/auth/token", body=body, key=key)),
                         "refresh replay mismatch")
         finally:
             c.deadline = suite_deadline
@@ -284,26 +324,27 @@ class Suite:
         body, headers = multipart(content, name)
         key = str(uuid.uuid4())
         result = self.client.request("POST", "/v1/statements", 202, body, key, headers)
-        require(result == self.client.request("POST", "/v1/statements", 202, body, key, headers),
+        require(same_json(result, self.client.request("POST", "/v1/statements", 202, body, key, headers)),
                 "upload replay mismatch")
         upload_id = quote(text_field(result, "upload_id"), safe="")
         path = f"/v1/statements/{upload_id}/progress"
         _, complete = self.client.stream(path, lambda e, d: e == "complete")
         _, replay = self.client.stream(path, lambda e, d: e == "complete")
-        require(complete == replay, "import terminal replay mismatch")
+        require(same_json(complete, replay), "import terminal replay mismatch")
         return complete
 
     def import_fixture(self):
         complete = self.upload("basic.ofx")
-        require(complete.get("operation_count") == 2 and complete.get("new_count") == 2 and
-                complete.get("unread_count") == 0, "unexpected initial import counters")
-        require(complete.get("totals", {}).get("expense") == 10000 and
-                complete.get("totals", {}).get("income") == 100000, "unexpected fixture financial totals")
+        require(int_field(complete, "operation_count") == 2 and int_field(complete, "new_count") == 2 and
+                int_field(complete, "unread_count") == 0, "unexpected initial import counters")
+        totals = object_field(complete, "totals")
+        require(int_field(totals, "expense") == 10000 and
+                int_field(totals, "income") == 100000, "unexpected fixture financial totals")
         duplicate = self.upload("basic.ofx")
-        require(duplicate.get("new_count") == 0 and duplicate.get("duplicate_count") == 2,
+        require(int_field(duplicate, "new_count") == 0 and int_field(duplicate, "duplicate_count") == 2,
                 "cross-upload deduplication failed")
         empty = self.upload("empty.ofx")
-        require(empty.get("operation_count") == 0 and empty.get("unread_count") == 0,
+        require(int_field(empty, "operation_count") == 0 and int_field(empty, "unread_count") == 0,
                 "unexpected empty import counters")
 
     def operations(self):
@@ -311,7 +352,7 @@ class Suite:
         feed = c.request("GET", "/v1/operations")
         require(len(list_field(feed, "items")) == 2, "fixture feed differs")
         result = c.request("GET", "/v1/operations?all_time=true")
-        require(result.get("total_count") == 2 and len(list_field(result, "items")) == 2,
+        require(int_field(result, "total_count") == 2 and len(list_field(result, "items")) == 2,
                 "fixture search differs")
         identifiers = {text_field(item, "id") for item in result["items"]}
         require(len(identifiers) == 2 and identifiers == {text_field(item, "id") for item in feed["items"]},
@@ -320,40 +361,50 @@ class Suite:
             for kind, expected in (("expense", 10000), ("income", 100000)):
                 filtered = c.request("GET", "/v1/operations?" + urlencode({"all_time": "true", "kind": kind, "transfer_mode": mode}))
                 items = list_field(filtered, "items")
-                require(len(items) == 1 and items[0].get("amount") == expected,
+                require(len(items) == 1 and int_field(filtered, "total_count") == 1 and int_field(items[0], "amount") == expected,
                         "fixture financial filter differs")
         for item in result["items"]:
             path = "/v1/operations/" + quote(text_field(item, "id"), safe="") + "?" + urlencode({"occurred_at": text_field(item, "occurred_at")})
             detail = c.request("GET", path)
-            require(detail.get("id") == item["id"] and detail.get("amount") == item.get("amount"),
+            require(text_field(detail, "id") == item["id"] and int_field(detail, "amount") == int_field(item, "amount"),
                     "operation detail differs from search")
-        require(bool(list_field(c.request("GET", "/v1/categories"), "categories")), "categories empty")
+        categories = list_field(c.request("GET", "/v1/categories"), "categories")
+        require(bool(categories), "categories empty")
+        for category in categories:
+            text_field(category, "id")
+            bool_field(category, "assignable")
+            bool_field(category, "is_system")
 
     def analytics(self):
         c = self.client
         for period, key in (("month", "2026-09"), ("quarter", "2026-Q3"), ("year", "2026")):
             periods = list_field(c.request("GET", "/v1/analytics/periods?" + urlencode({"period": period})), "periods")
-            while not any(p.get("key") == key for p in periods):
+            while key not in [text_field(p, "key") for p in periods]:
                 time.sleep(min(1, c.remaining()))
                 periods = list_field(c.request("GET", "/v1/analytics/periods?" + urlencode({"period": period})), "periods")
             for mode in ("with", "without"):
                 path = "/v1/analytics?" + urlencode({"period": period, "date": key,
                     "transfer_mode": mode, "supports": SUPPORTS})
                 data = c.request("GET", path)
-                while data.get("has_data") is not True or data.get("state", {}).get("recalculating") is True:
+                while not analytics_ready(data):
                     time.sleep(min(1, c.remaining()))
                     data = c.request("GET", path)
-                require(data.get("has_data") is True and isinstance(data.get("state"), dict),
-                        "analytics data state differs")
                 require(data.get("params") == {"period": period, "date": key, "transfer_mode": mode},
                         "analytics parameters differ")
-                require(bool(list_field(data, "blocks")), "analytics blocks missing")
+                blocks = list_field(data, "blocks")
+                require(bool(blocks), "analytics blocks missing")
+                for block in blocks:
+                    text_field(block, "type")
+                    require(int_field(block, "v") == 1, "unsupported analytics block version")
 
     def assistant_read(self):
         c = self.client
-        c.request("GET", "/v1/assistant/limit")
+        limit = c.request("GET", "/v1/assistant/limit")
+        require(0 <= int_field(limit, "remaining") <= int_field(limit, "daily_max"), "invalid assistant limit")
+        text_field(limit, "resets_at")
         data = c.request("GET", "/v1/assistant/messages")
         require(list_field(data, "messages") == [], "new account has assistant history")
+        require(bool_field(data, "has_older") is False, "new account has older assistant history")
 
     def logout(self):
         self.client.request("POST", "/v1/auth/logout", 204, {"refresh_token": self.refresh})

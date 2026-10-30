@@ -85,6 +85,32 @@ class Boundaries(unittest.TestCase):
         self.assertEqual(timer.call_args_list[0].args, (acceptance.signal.ITIMER_REAL, 45.0))
         self.assertEqual(timer.call_args_list[-1].args, (acceptance.signal.ITIMER_REAL, 290.0, 0.0))
 
+    def test_boolean_and_integer_fields_reject_cross_type_equality(self):
+        for value in ("true", None, 0, 1, 0.0):
+            with self.subTest(boolean=value), self.assertRaises(acceptance.CheckFailed):
+                acceptance.bool_field({"value": value}, "value")
+        for value in (True, False, 0.0, 2.0, "2", None):
+            with self.subTest(integer=value), self.assertRaises(acceptance.CheckFailed):
+                acceptance.int_field({"value": value}, "value")
+        self.assertEqual(acceptance.int_field({"value": 0}, "value"), 0)
+        self.assertIs(acceptance.bool_field({"value": False}, "value"), False)
+
+    def test_analytics_terminal_requires_explicit_boolean_false(self):
+        self.assertTrue(acceptance.analytics_ready({"has_data": True, "state": {"recalculating": False}}))
+        self.assertFalse(acceptance.analytics_ready({"has_data": True, "state": {"recalculating": True}}))
+        self.assertFalse(acceptance.analytics_ready({"has_data": False}))
+        for value in ("true", "false", None, 0, 1):
+            with self.subTest(value=value), self.assertRaises(acceptance.CheckFailed):
+                acceptance.analytics_ready({"has_data": True, "state": {"recalculating": value}})
+        with self.assertRaises(acceptance.CheckFailed):
+            acceptance.analytics_ready({"has_data": True, "state": {}})
+
+    def test_replay_identity_preserves_json_value_types(self):
+        self.assertFalse(acceptance.same_json({"count": 0}, {"count": False}))
+        self.assertFalse(acceptance.same_json({"count": [1]}, {"count": [True]}))
+        self.assertFalse(acceptance.same_json({"count": 2}, {"count": 2.0}))
+        self.assertTrue(acceptance.same_json({"b": [False], "a": 1}, {"a": 1, "b": [False]}))
+
     def test_report_is_private_exclusive_and_does_not_follow_symlink(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "report.json"
@@ -289,6 +315,43 @@ class MainChecks(unittest.TestCase):
                 self.assertIn("failed", report["cases"].values())
                 self.assertNotIn("private-access", report_path.read_text())
 
+    def test_malformed_recalculating_never_passes_analytics_or_main(self):
+        for value in ("true", "false", None, 0, 1, "missing"):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                args = self.inputs(root)
+                peer = SuiteChecks.Peer()
+                request = peer.request
+                def bad_request(method, path, *a, **kw):
+                    result = request(method, path, *a, **kw)
+                    if path.startswith("/v1/analytics?"):
+                        result["state"] = {} if value == "missing" else {"recalculating": value}
+                    return result
+                peer.request = bad_request
+                with patch.object(acceptance, "Client", return_value=peer), contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(acceptance.main(args), 1)
+                report = json.loads((root / "report.json").read_text())
+                self.assertEqual(report["smoke_result"], "failed")
+                self.assertEqual(report["cases"]["analytics_basic_periods_modes"], "failed")
+                self.assertNotIn("auth_logout_repeat", report["cases"])
+
+    def test_boolean_zero_import_counter_cannot_pass_oracle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = self.inputs(root)
+            peer = SuiteChecks.Peer()
+            stream = peer.stream
+            def bad_stream(path, *a, **kw):
+                event, result = stream(path, *a, **kw)
+                if path.startswith("/v1/statements/"):
+                    result["unread_count"] = False
+                return event, result
+            peer.stream = bad_stream
+            with patch.object(acceptance, "Client", return_value=peer), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(acceptance.main(args), 1)
+            report = json.loads((root / "report.json").read_text())
+            self.assertEqual(report["cases"]["import_basic_duplicate_empty_sse"], "failed")
+
 
 class SuiteChecks(unittest.TestCase):
     class Peer:
@@ -334,14 +397,16 @@ class SuiteChecks(unittest.TestCase):
                 identifier = path.rsplit("/", 1)[1]
                 return {"id": identifier, "amount": 10000 if identifier == "expense" else 100000}
             if path == "/v1/categories":
-                return {"categories": [{"id": "cat_supermarkets"}]}
+                return {"categories": [{"id": "cat_supermarkets", "assignable": True, "is_system": False}]}
             if path == "/v1/analytics/periods":
                 return {"periods": [{"key": {"month": "2026-09", "quarter": "2026-Q3", "year": "2026"}[query["period"][0]]}]}
             if path == "/v1/analytics":
-                return {"has_data": True, "state": {"recalculating": False}, "blocks": [{"type": "text"}],
+                return {"has_data": True, "state": {"recalculating": False}, "blocks": [{"type": "text", "v": 1}],
                         "params": {k: query[k][0] for k in ("period", "date", "transfer_mode")}}
             if path == "/v1/assistant/messages":
-                return {"messages": []}
+                return {"messages": [], "has_older": False}
+            if path == "/v1/assistant/limit":
+                return {"remaining": 5, "daily_max": 5, "resets_at": "2026-10-31T00:00:00+03:00"}
             return {}
 
         def stream(self, path, terminal, headers=None):
