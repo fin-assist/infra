@@ -53,7 +53,9 @@ runner останавливается до импорта. Данные авто
 
 - актуальный personal_data документ; Start с consent/14+; replay того же ключа; verified SSE
   и повторную доставку того же registration_token; Register и его replay;
-- refresh с replay в одном 60-секундном окне, чтение профиля;
+- refresh с replay в одном 60-секундном окне: локальный абсолютный бюджет пары 45 с
+  (не длиннее оставшегося suite deadline), проверка срока до повторной HTTP-попытки;
+  после просрочки использованный refresh не повторяется; чтение профиля;
 - `basic.ofx`, replay того же multipart/ключа, терминальный progress SSE и reconnect;
   второй импорт того же содержимого с новым ключом (dedup), затем `empty.ofx`;
 - ленту, all-time поиск, детали обеих операций, категории и финансовые фильтры `with`/`without`;
@@ -122,7 +124,7 @@ pass/fail/not_run и причина. Сохранять только разре�
    job и версионный backfill по действующему runbook BSD: старый снимок виден до целой атомарной
    замены обоих режимов; removed_periods доставлены. Не менять системные часы/production registry
    и не подменять SQL статусами для имитации успеха.
-5. **Помощник.** После `POST /v1/profile/assistant-consent` с текущей version запустить управляемый
+5. **Помощник.** После `PUT /v1/profile/assistant-consent` с текущей version запустить управляемый
    fake-llm сценарий, требующий реальных Overview/Aggregate/Find/GetAnalytics/GetDataVersion.
    Вопрос — `POST /v1/assistant/messages`, SSE — `/v1/assistant/messages/{answer_id}/events`.
    Сопоставить server-built блоки с oracle, replay/done/history/limit; выполнить новую committed

@@ -70,6 +70,21 @@ class Boundaries(unittest.TestCase):
             with self.subTest(value=invalid), self.assertRaises(acceptance.CheckFailed):
                 acceptance.Client("http://127.0.0.1", time.monotonic() + 1, client_version=invalid)
 
+    def test_absolute_alarm_interrupts_slow_operation(self):
+        with self.assertRaisesRegex(acceptance.CheckFailed, "budget"):
+            with acceptance.alarm_budget(time.monotonic() + 0.02):
+                time.sleep(1)
+
+    def test_local_alarm_restores_only_remaining_outer_budget(self):
+        with patch.object(acceptance.time, "monotonic", side_effect=[100.0, 110.0]), \
+                patch.object(acceptance.signal, "getitimer", return_value=(300.0, 0.0)), \
+                patch.object(acceptance.signal, "signal"), \
+                patch.object(acceptance.signal, "setitimer") as timer:
+            with acceptance.alarm_budget(145.0):
+                pass
+        self.assertEqual(timer.call_args_list[0].args, (acceptance.signal.ITIMER_REAL, 45.0))
+        self.assertEqual(timer.call_args_list[-1].args, (acceptance.signal.ITIMER_REAL, 290.0, 0.0))
+
     def test_report_is_private_exclusive_and_does_not_follow_symlink(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "report.json"
@@ -245,6 +260,35 @@ class MainChecks(unittest.TestCase):
                 self.assertEqual(acceptance.main(args), 1)
                 run.assert_not_called()
 
+    def test_malformed_nested_api_values_leave_nonempty_failed_report(self):
+        for malformed in ("totals", "items", "periods"):
+            with self.subTest(malformed=malformed), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                args = self.inputs(root)
+                peer = SuiteChecks.Peer()
+                request, stream = peer.request, peer.stream
+                def bad_request(method, path, *a, **kw):
+                    result = request(method, path, *a, **kw)
+                    if malformed == "items" and path == "/v1/operations?all_time=true":
+                        return {"items": ["malformed", "malformed"], "total_count": 2}
+                    if malformed == "periods" and path.startswith("/v1/analytics/periods?"):
+                        return {"periods": ["malformed"]}
+                    return result
+                def bad_stream(path, *a, **kw):
+                    event, result = stream(path, *a, **kw)
+                    if malformed == "totals" and path.startswith("/v1/statements/"):
+                        result["totals"] = None
+                    return event, result
+                peer.request, peer.stream = bad_request, bad_stream
+                with patch.object(acceptance, "Client", return_value=peer), contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(acceptance.main(args), 1)
+                report_path = root / "report.json"
+                self.assertGreater(report_path.stat().st_size, 0)
+                report = json.loads(report_path.read_text())
+                self.assertEqual(report["smoke_result"], "failed")
+                self.assertIn("failed", report["cases"].values())
+                self.assertNotIn("private-access", report_path.read_text())
+
 
 class SuiteChecks(unittest.TestCase):
     class Peer:
@@ -254,6 +298,10 @@ class SuiteChecks(unittest.TestCase):
         def __init__(self):
             self.calls, self.upload_keys, self.upload_requests = [], {}, []
             self.bad_duplicate = False
+            self.deadline = time.monotonic() + 300
+
+        def remaining(self):
+            return 15
 
         def request(self, method, path, expected=200, body=None, key=None, headers=None):
             self.calls.append((method, path, key))
@@ -334,6 +382,37 @@ class SuiteChecks(unittest.TestCase):
             acceptance.Suite(peer, report, "+70000001234").run()
         self.assertEqual(report["cases"]["import_basic_duplicate_empty_sse"], "failed")
         self.assertNotIn("operations_basic_search_details_categories", report["cases"])
+
+    def test_slow_first_refresh_never_replays_used_token_after_budget(self):
+        clock = [100.0]
+        client = acceptance.Client("http://127.0.0.1", 400.0)
+        suite = acceptance.Suite(client, {"cases": {}}, "+70000001234")
+        suite.refresh = "private-original-refresh"
+        def slow_first(*_args, **_kwargs):
+            self.assertEqual(client.deadline, 145.0)
+            clock[0] = 146.0
+            return {"access_token": "private-access", "refresh_token": "private-rotated-refresh"}
+        with patch.object(acceptance.time, "monotonic", side_effect=lambda: clock[0]), \
+                patch.object(client, "request", side_effect=slow_first) as request:
+            with self.assertRaisesRegex(acceptance.CheckFailed, "deadline"):
+                suite.refresh_session()
+            self.assertEqual(request.call_count, 1)
+        self.assertEqual(client.deadline, 400.0)
+        self.assertEqual(suite.refresh, "private-original-refresh")
+
+    def test_refresh_budget_never_extends_shorter_suite_deadline(self):
+        client = acceptance.Client("http://127.0.0.1", 120.0)
+        suite = acceptance.Suite(client, {"cases": {}}, "+70000001234")
+        suite.refresh = "private-original-refresh"
+        def failed_first(*_args, **_kwargs):
+            self.assertEqual(client.deadline, 120.0)
+            raise OSError("simulated transport failure")
+        with patch.object(acceptance.time, "monotonic", return_value=100.0), \
+                patch.object(client, "request", side_effect=failed_first) as request:
+            with self.assertRaises(OSError):
+                suite.refresh_session()
+            self.assertEqual(request.call_count, 1)
+        self.assertEqual(client.deadline, 120.0)
 
 
 if __name__ == "__main__":

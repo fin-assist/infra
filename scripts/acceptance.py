@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run bounded synthetic public-API checks; never equate smoke with FIN-362 acceptance."""
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import http.client
@@ -34,6 +35,29 @@ class CheckFailed(Exception):
 def require(condition, message):
     if not condition:
         raise CheckFailed(message)
+
+
+@contextmanager
+def alarm_budget(deadline):
+    """Bound slow-drip/DNS too, preserving an enclosing alarm's absolute deadline."""
+    now = time.monotonic()
+    old_delay, old_interval = signal.getitimer(signal.ITIMER_REAL)
+    delay = min(deadline - now, old_delay) if old_delay > 0 else deadline - now
+    require(delay > 0, "request budget exceeded")
+    old_deadline = now + old_delay
+    def expired(_signum, _frame):
+        raise CheckFailed("request budget exceeded")
+    old_handler = signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, delay)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old_handler)
+        if old_delay > 0:
+            remaining = old_deadline - time.monotonic()
+            require(remaining > 0, "suite deadline exceeded")
+            signal.setitimer(signal.ITIMER_REAL, remaining, old_interval)
 
 
 def origin(value):
@@ -237,9 +261,20 @@ class Suite:
 
     def refresh_session(self):
         body, key = {"refresh_token": self.refresh}, str(uuid.uuid4())
-        pair = self.client.request("POST", "/v1/auth/token", body=body, key=key)
-        require(pair == self.client.request("POST", "/v1/auth/token", body=body, key=key),
-                "refresh replay mismatch")
+        c = self.client
+        suite_deadline = c.deadline
+        # A used refresh token is safe to replay only within the contractual 60s
+        # cache window. Reserve 15s for transit/clock uncertainty; never issue the
+        # replay after this absolute budget, even if slow-drip I/O did not time out.
+        c.deadline = min(suite_deadline, time.monotonic() + 45)
+        try:
+            with alarm_budget(c.deadline):
+                pair = c.request("POST", "/v1/auth/token", body=body, key=key)
+                c.remaining()
+                require(pair == c.request("POST", "/v1/auth/token", body=body, key=key),
+                        "refresh replay mismatch")
+        finally:
+            c.deadline = suite_deadline
         self.client.token = text_field(pair, "access_token")
         self.refresh = text_field(pair, "refresh_token")
         self.client.request("GET", "/v1/profile")
@@ -391,7 +426,7 @@ def main(argv=None):
             signal.signal(signal.SIGALRM, previous)
         report["smoke_result"] = "passed"
         code = 0
-    except (CheckFailed, OSError, ValueError, KeyError, TypeError, http.client.HTTPException):
+    except Exception:
         # Never serialize exception messages: transports and parsers may include tokens,
         # private paths or returned financial content in their diagnostics.
         report["smoke_result"] = "failed"
