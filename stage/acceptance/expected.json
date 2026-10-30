@@ -1,0 +1,26 @@
+{
+  "currency": "RUB",
+  "amount_unit": "kopeck",
+  "precondition": "A separate new synthetic account; do not mix with basic.ofx smoke",
+  "financial.ofx": {
+    "raw_operations": 7,
+    "public_feed_items": 6,
+    "own_transfer_pairs": 1,
+    "with": {"expense": 110000, "income": 1040000},
+    "without": {"expense": 80000, "income": 1000000}
+  },
+  "then_financial-overlap.ofx": {
+    "new_count": 1,
+    "duplicate_count": 2,
+    "public_feed_items": 7,
+    "with": {"expense": 115000, "income": 1040000},
+    "without": {"expense": 85000, "income": 1000000}
+  },
+  "then_unread.ofx": {"new_count": 0, "unread_count": 1},
+  "then_unread-fixed.ofx": {
+    "new_count": 1,
+    "remaining_unread_count": 0,
+    "with": {"expense": 117500, "income": 1040000},
+    "without": {"expense": 87500, "income": 1000000}
+  }
+}
