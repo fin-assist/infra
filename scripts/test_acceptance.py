@@ -65,6 +65,11 @@ class Boundaries(unittest.TestCase):
         with self.assertRaises(acceptance.CheckFailed):
             acceptance.Client("http://127.0.0.1", time.monotonic() - 1).remaining()
 
+    def test_client_version_requires_platform_semver_and_build(self):
+        for invalid in ("0.2.14", "android/0.2.14", "android/00.2.14+1", "android/0.2.14+1\r\nx:secret"):
+            with self.subTest(value=invalid), self.assertRaises(acceptance.CheckFailed):
+                acceptance.Client("http://127.0.0.1", time.monotonic() + 1, client_version=invalid)
+
     def test_report_is_private_exclusive_and_does_not_follow_symlink(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "report.json"
@@ -125,6 +130,7 @@ class HTTPChecks(unittest.TestCase):
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 self.server.paths.append(self.path)
+                self.server.client_versions.append(self.headers.get("X-Client-Version"))
                 self.send_response(status)
                 self.send_header("Content-Type", content_type)
                 for key, value in (extra or {}).items():
@@ -137,6 +143,7 @@ class HTTPChecks(unittest.TestCase):
                 pass
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         server.paths = []
+        server.client_versions = []
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(thread.join, 2)
@@ -146,8 +153,10 @@ class HTTPChecks(unittest.TestCase):
         return client, server
 
     def test_reads_json_over_http(self):
-        client, _ = self.serve(200, b'{"categories":[]}')
+        client, server = self.serve(200, b'{"categories":[]}')
         self.assertEqual(client.request("GET", "/v1/categories"), {"categories": []})
+        self.assertEqual(server.client_versions, ["android/0.2.14+1"])
+        self.assertRegex(server.client_versions[0], "^" + acceptance.CLIENT_VERSION_PATTERN + "$")
 
     def test_redirect_is_not_followed_even_same_origin(self):
         client, server = self.serve(302, b"", extra={"Location": "/v1/profile?token=private"})

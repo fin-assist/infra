@@ -22,6 +22,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MAX_BODY = 4 * 1024 * 1024
 MAX_LINE = 64 * 1024
 SUPPORTS = "heading@1,tile_group@1,chart@1,ranked_list@1,insight_card@1,rows@1,text@1"
+# contracts 87e8200 openapi/openapi.yaml, components.parameters.XClientVersion.
+CLIENT_VERSION_PATTERN = r"[a-z][a-z0-9_]*/(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\+[0-9]+"
+DEFAULT_CLIENT_VERSION = "android/0.2.14+1"
 
 
 class CheckFailed(Exception):
@@ -54,9 +57,12 @@ def origin(value):
 class Client:
     """No proxy, redirect, cookies, automatic retries or unbounded response reads."""
 
-    def __init__(self, base_url, deadline, timeout=15):
+    def __init__(self, base_url, deadline, timeout=15, client_version=DEFAULT_CLIENT_VERSION):
         self.base, self.port = origin(base_url)
         self.deadline, self.timeout = deadline, timeout
+        require(len(client_version) <= 64 and re.fullmatch(CLIENT_VERSION_PATTERN, client_version),
+                "invalid client version header")
+        self.client_version = client_version
         self.token = None
 
     def remaining(self):
@@ -67,7 +73,7 @@ class Client:
     def open(self, method, path, body=None, key=None, headers=None):
         require(path.startswith("/v1/") and "\r" not in path and "\n" not in path,
                 "invalid API path")
-        request_headers = {"X-Client-Version": "0.2.14", "Accept": "application/json"}
+        request_headers = {"X-Client-Version": self.client_version, "Accept": "application/json"}
         if self.token:
             request_headers["Authorization"] = "Bearer " + self.token
         if key:
@@ -350,6 +356,7 @@ def main(argv=None):
     parser.add_argument("--set", type=Path, required=True)
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--client-version", default=DEFAULT_CLIENT_VERSION)
     parser.add_argument("--timeout", type=int, default=300, choices=range(30, 601), metavar="30..600")
     parser.add_argument("--confirm-stage-synthetic", action="store_true", required=True,
                         help="operator confirms isolated stage, fake phone/LLM and synthetic account")
@@ -378,7 +385,7 @@ def main(argv=None):
         previous = signal.signal(signal.SIGALRM, alarm)
         signal.setitimer(signal.ITIMER_REAL, args.timeout)
         try:
-            Suite(Client(args.base_url, time.monotonic() + args.timeout), report, args.phone).run()
+            Suite(Client(args.base_url, time.monotonic() + args.timeout, client_version=args.client_version), report, args.phone).run()
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
             signal.signal(signal.SIGALRM, previous)

@@ -29,10 +29,13 @@ python3 scripts/acceptance.py \
   --set /secure/stage-set.json \
   --artifacts /secure/artifacts \
   --report /secure/fin362-smoke-unique.json \
+  --client-version android/0.2.14+1 \
   --timeout 300 \
   --confirm-stage-synthetic
 ```
 
+`X-Client-Version` имеет контрактный формат `<platform>/<semver>+<build>`; передать версию не ниже
+настроенного минимума BFF через `--client-version` (по умолчанию `android/0.2.14+1`).
 Заменить адрес и выбрать **неиспользованный** номер из service-local синтетического диапазона
 `+7000000xxxx`; это не выделенный оператором связи тестовый диапазон, поэтому реальному провайдеру
 он не передаётся. Запуск создаёт один аккаунт и три загрузки. Если номер уже зарегистрирован,
