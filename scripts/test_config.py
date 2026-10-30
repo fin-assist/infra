@@ -10,6 +10,16 @@ spec.loader.exec_module(module)
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_bff_routes_to_every_real_stage_service(self):
+        text = Path("stage/env/bank-bff.example").read_text()
+        configured = dict(line.split("=", 1) for line in text.splitlines()
+                          if line and not line.startswith("#"))
+        for name, port in (("USER", 9090), ("STATEMENTS", 9092),
+                           ("ANALYTICS", 9093), ("ASSISTANT", 9094)):
+            with self.subTest(service=name):
+                self.assertEqual(configured.get(name + "_GRPC_ADDR"),
+                                 f"dns:///127.0.0.1:{port}")
+
     def test_no_port_collisions_or_wildcard_listeners(self):
         ports = []
         for path in Path("stage/systemd").glob("*.service"):
