@@ -1,0 +1,16 @@
+[
+  {"group": 1, "case": "consent_refusal_outdated_and_revocation", "status": "not_run", "evidence": "HTTP status/error.code; consent version and absence of provider/model call, no secret payload"},
+  {"group": 1, "case": "overlapping_import_and_unread_repair", "status": "not_run", "evidence": "Synthetic original/overlap/broken/fixed fixture hashes; import counters and unread-line closure"},
+  {"group": 2, "case": "own_transfer_pair_refund_and_mode_totals", "status": "not_run", "evidence": "Independent expected kopecks for both modes; pair excluded in both; refund reduces expense"},
+  {"group": 2, "case": "feed_pagination_and_analytics_filters", "status": "not_run", "evidence": "Several covered quarters; next_before continuation without omissions/duplicates; server-provided filter equals displayed amount"},
+  {"group": 3, "case": "category_pair_split_reimport", "status": "not_run", "evidence": "PATCH response/replaced_id; manual category retained after reimport; both mode snapshots reach expected totals"},
+  {"group": 3, "case": "regular_dismiss_restore_reimport", "status": "not_run", "evidence": "Server-provided regular-payment id; dismiss/restore repeat and reimport; changed analytics in both modes"},
+  {"group": 4, "case": "coverage_gaps_stale_timezone_removed_periods", "status": "not_run", "evidence": "Partial/gap/empty fixtures; calendar boundaries and stale threshold; timezone change and removed_periods delivered"},
+  {"group": 4, "case": "daily_and_definition_backfill", "status": "not_run", "evidence": "Approved operator window; old snapshot until atomic replacement; real daily/backfill jobs, definition and delivery versions"},
+  {"group": 5, "case": "assistant_real_tools_sse_history_changed_since", "status": "not_run", "evidence": "Controlled fake-llm script hash/correlation; real BSD/analytics calls; SSE done/history and changed_since after committed category change"},
+  {"group": 5, "case": "assistant_limits_no_data_locked", "status": "not_run", "evidence": "Real tool NO_DATA/LOCKED; charged=false; daily limit errors and unchanged counters on replay/reconnect"},
+  {"group": 6, "case": "delete_upload_and_encrypted_empty_fence", "status": "not_run", "evidence": "Approved deletion of run-owned synthetic upload; surviving operations/recalculation; exact empty encrypted fence and late-create refusal"},
+  {"group": 6, "case": "delete_account_purge_revoke_no_resurrection", "status": "not_run", "evidence": "Approved run-owned synthetic account deletion; purge delivered to all real neighbors, token refusal, delayed work cannot restore data"},
+  {"group": 7, "case": "restart_import_calculation_delivery_and_outage", "status": "not_run", "evidence": "Approved operator fault window; real systemd restart/outage and recovery; no lost/double effect, bounded SSE reconnect"},
+  {"group": 7, "case": "cross_user_read_write_isolation", "status": "not_run", "evidence": "Two run-owned synthetic accounts; each foreign upload/operation/answer refused with contractual error; unchanged owner state"}
+]

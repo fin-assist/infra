@@ -186,6 +186,9 @@ bounded TCP readiness на127.0.0.1:8092 (до20 попыток, connect2с, п�
 
 ## Что подтвердить на настоящем хосте
 
+Подготовка сквозной HTTP/SSE-приёмки FIN-362: [runner, synthetic fixtures и протокол доказательств](acceptance/README.md).
+Его базовый smoke не подтверждает полную приёмку; оставшиеся обязательные сценарии отмечены явно.
+
 - Версии ОС/PG18/nginx/systemd, SHA каждого бинаря, shared JWKS и проверка service/user identity.
 - Env не перекрывает unit; ss -ltn не показывает внешний PG/gRPC/operational/fake listener.
 - BFF IPAddressAllow/Deny реально работает (cgroup eBPF и parent slices — инструкция в его unit).
