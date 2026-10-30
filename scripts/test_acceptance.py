@@ -227,6 +227,15 @@ class MainChecks(unittest.TestCase):
                 self.assertEqual(acceptance.main(args), 1)
                 run.assert_not_called()
 
+    def test_output_must_be_reservable_before_network(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = self.inputs(root)
+            args[args.index("--report") + 1] = str(root / "missing/report.json")
+            with patch.object(acceptance.Suite, "run") as run, contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(acceptance.main(args), 1)
+                run.assert_not_called()
+
 
 class SuiteChecks(unittest.TestCase):
     class Peer:

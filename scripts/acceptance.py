@@ -330,9 +330,14 @@ class Suite:
             self.check(case, action)
 
 
-def write_report(path, report):
+def open_report(path):
     # Create exclusively, without following a pre-existing symlink or overwriting evidence.
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+
+
+def write_report(path, report, fd=None):
+    if fd is None:
+        fd = open_report(path)
     with os.fdopen(fd, "w") as stream:
         json.dump(report, stream, indent=2, ensure_ascii=False)
         stream.write("\n")
@@ -352,10 +357,13 @@ def main(argv=None):
     report = {"schema_version": 1, "task": "FIN-362", "started_at": datetime.now(timezone.utc).isoformat(),
               "scope": "public_api_smoke", "full_acceptance": False, "deployed_set_verified": False, "cases": {},
               "remaining": json.loads((ROOT / "stage/acceptance/matrix.json").read_text())}
+    report_fd = None
     try:
         require(re.fullmatch(r"\+7000000[0-9]{4}", args.phone), "synthetic phone required")
         origin(args.base_url)
-        require(not args.report.exists() and not args.report.is_symlink(), "report already exists")
+        # Reserve evidence before any HTTP mutations; retain the descriptor so a later
+        # path replacement cannot redirect private output to a different file.
+        report_fd = open_report(args.report)
         pins = stage.read_set(args.set)
         manifests = stage.verify_set(pins, args.artifacts)
         report["source_set"] = pins
@@ -383,7 +391,9 @@ def main(argv=None):
         code = 1
     report["finished_at"] = datetime.now(timezone.utc).isoformat()
     try:
-        write_report(args.report, report)
+        if report_fd is None:
+            raise OSError("no private report descriptor")
+        write_report(args.report, report, report_fd)
     except OSError:
         print("Could not create private report", file=sys.stderr)
         return 1
