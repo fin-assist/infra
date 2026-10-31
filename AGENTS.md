@@ -27,3 +27,15 @@ FIN-410: `.github/workflows/stage-deploy.yml` is manual/main-only and uses the `
 for the entire set, verifies unselected installed identities, and persists a sanitized report.
 Keep the protocol and preinstalled implementation hashes aligned; never deploy or configure secrets
 as a side effect of testing the workflow. See stage/README.md for activation and uncertain SSH outcomes.
+
+## Claude reviewer
+
+FIN-412: `.github/workflows/claude.yml` handles intentional mentions in PR comments/reviews.
+A read-only, no-checkout job queries the live PR and permits the write-enabled job only for open
+same-repository PRs. Standalone issues and fork PRs must not reach that job. Keep Claude's normal
+write-access actor checks enabled; do not enable arbitrary bots or non-write collaborators.
+The project configuration is Claude Opus 5.5 with high effort and the inline-comment tool enabled.
+Review Security and Tests separately and report verified findings inline in Russian.
+Activation requires the Claude GitHub App and an accessible `CLAUDE_CODE_OAUTH_TOKEN` secret.
+Comment-triggered workflows run from the default branch: request Claude only after the workflow
+exists in main. Review jobs never reference the stage Environment or receive its deploy credentials.
