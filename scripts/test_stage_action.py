@@ -280,6 +280,14 @@ sys.exit(remote.main())
             self.assertEqual(result.returncode, 0, result.stderr)
             report = json.loads(result.stdout)
             self.assertEqual(report["after"], pins)
+            for service, pin in pins.items():
+                # DynamicUser must traverse every published directory even with endpoint umask 077.
+                for path in (root / "opt", root / "opt/releases", root / "opt/releases" / service,
+                             root / "opt/releases" / service / pin["sha"]):
+                    self.assertEqual(path.stat().st_mode & 0o777, 0o755, str(path))
+                binary = root / "opt/releases" / service / pin["sha"] / service
+                self.assertEqual(binary.stat().st_mode & 0o777, 0o755)
+            self.assertEqual((root / "reports").stat().st_mode & 0o777, 0o700)
             persisted = root / "reports/123-1.json"
             self.assertEqual(json.loads(persisted.read_text()), report)
             self.assertEqual(persisted.stat().st_mode & 0o777, 0o600)

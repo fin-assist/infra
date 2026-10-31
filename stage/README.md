@@ -262,6 +262,9 @@ Environment, секреты и VPS не меняются; первый факт�
 5. Проверить запас диска для временного полного набора (до800МиБ), настроенные units/env,
    резервную копию и совместимость миграций. Endpoint требует Linux root, создаёт private staging
    и `/var/lib/finassist-deploy/reports/`; credentials сервисов не уходят с VPS.
+   Опубликованные `/opt/finassist`, `releases`, каталоги сервиса/SHA и бинарь получают0755,
+   чтобы systemd DynamicUser мог пройти к executable независимо от private umask endpoint.
+   В этих путях не хранить credentials; staging и новые каталоги отчётов остаются0700, отчёты0600.
 
 ### Запуск
 

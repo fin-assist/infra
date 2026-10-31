@@ -140,17 +140,21 @@ def atomic_link(path, target):
 MIGRATION_OVERRIDE_ROOT = Path("/run/systemd/system")
 
 
-def managed_directory(root, *parts):
+def managed_directory(root, *parts, mode=None):
     """Reject symlinks before following any managed writable directory."""
     if root.is_symlink():
         raise ValueError("managed root must not be a symlink")
     root.mkdir(parents=True, exist_ok=True)
     current = root.resolve()
+    if mode is not None:
+        current.chmod(mode)
     for part in parts:
         current = current / part
         if current.is_symlink():
             raise ValueError("managed directory must not be a symlink")
         current.mkdir(exist_ok=True)
+        if mode is not None:
+            current.chmod(mode)
     return current
 
 
@@ -181,8 +185,10 @@ def deploy(service, pin, directory, root=Path("/opt/finassist"), result=None):
     result = result if result is not None else {}
     result.update(phase="verify", rollback="not-needed")
     manifest = verify_artifact(service, pin, directory)
-    root = managed_directory(root)
-    releases = managed_directory(root, "releases", service)
+    # Published binaries must be traversable by systemd DynamicUser, independent of a private
+    # caller umask. Only these public binary paths are opened; credentials/staging remain private.
+    root = managed_directory(root, mode=0o755)
+    releases = managed_directory(root, "releases", service, mode=0o755)
     target = releases / pin["sha"]
     current = root / service
     if current.exists() and not current.is_symlink():
@@ -205,6 +211,7 @@ def deploy(service, pin, directory, root=Path("/opt/finassist"), result=None):
             raise ValueError("installed binary must be a regular file")
         if hashlib.sha256((target / service).read_bytes()).hexdigest() != manifest["binary_sha256"]:
             raise ValueError("immutable release checksum mismatch")
+    target.chmod(0o755)
     if service not in ("bank-bff", "fake-llm"):
         result["phase"] = "migration"
         migrate(service, target)
