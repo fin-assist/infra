@@ -217,3 +217,102 @@ IAM bootstrap dependency и политика рестарта BSD; fake unit/dro
 Точные настройки и deployment-ограничения: README/docs/config.md/docs/import.md соответствующих сервисов.
 [nginx proxy](https://nginx.org/en/docs/http/ngx_http_proxy_module.html),
 [HTTP/2](https://nginx.org/en/docs/http/ngx_http_v2_module.html).
+
+## Ручная выкладка из GitHub Actions (FIN-410)
+
+Workflow **Deploy stage** (`.github/workflows/stage-deploy.yml`) запускается только через
+`workflow_dispatch` на `main` репозитория `fin-assist/infra`. Автоматического запуска после CI нет.
+Наличие workflow не означает настройку доступа или выполненный deploy. В рамках PR FIN-410
+Environment, секреты и VPS не меняются; первый фактический запуск требует отдельной команды владельца.
+
+### Однократная настройка после merge
+
+1. Создать GitHub Environment **stage**, разрешить deployment только из ветки `main`
+   (Selected branches and tags → branch `main`, без разрешённых tags). При необходимости включить
+   required reviewers. Не ослаблять защиты ветки. У workflow есть дополнительный main/repository guard.
+2. В этом Environment сохранить секреты:
+
+   | Секрет | Назначение |
+   |---|---|
+   | `STAGE_ARTIFACTS_TOKEN` | Fine-grained PAT или заранее полученный installation token: только Actions read и Metadata read в пяти сервисных репозиториях. Обычный GITHUB_TOKEN infra не даёт доступа к чужим private Actions artifacts. |
+   | `STAGE_SSH_HOST` | DNS-имя или IPv4 VPS, без URL, логина и shell-синтаксиса. |
+   | `STAGE_SSH_KEY` | Отдельный приватный SSH-ключ только для stage deploy. |
+   | `STAGE_SSH_KNOWN_HOSTS` | Заранее проверенная строка known_hosts; при нестандартном порте имя имеет вид `[host]:port`. |
+
+   Переменная Environment `STAGE_SSH_PORT` необязательна (по умолчанию22). Fingerprint проверяется
+   по независимому доверенному каналу; `ssh-keyscan` во время запуска не используется.
+   Не передавать секреты через workflow inputs, set JSON или комментарии.
+3. После отдельного разрешения установить **проверенный merged checkout infra** в root-owned
+   `/opt/finassist-infra`, без записи другими. Обязательны `scripts/stage_remote.py`, `stage.py`,
+   `check_env.py` и `stage/systemd/`. Не перезаписывать конфигурацию и credentials действующего stage.
+   Runner передаёт SHA-256 трёх Python-файлов; несовпадение с предустановленными файлами останавливает
+   запуск до миграции. После изменения этих файлов обновлять endpoint отдельно из проверенного main.
+4. Установить публичный deploy-ключ в root authorized_keys с ограничением:
+
+   ```text
+   restrict,command="python3 /opt/finassist-infra/scripts/stage_remote.py" ssh-ed25519 PUBLIC_KEY stage-deploy
+   ```
+
+   Ключ не должен разрешать shell, forwarding или PTY. SSH обязан допускать этот forced command
+   для root; существующий административный доступ не менять и общий root password login не включать.
+   Обработчик принимает только bundle с данными; исполняемые скрипты по SSH не доставляются.
+   Выделенный ключ даёт право выкладывать бинарные артефакты на stage: ограничить доступ к Environment
+   и право изменять main соответственно. Происхождение через GitHub API проверяет runner, VPS проверяет
+   сохранённое evidence и checksum; это доверенный канал оператора, не подпись от независимого издателя.
+5. Проверить запас диска для временного полного набора (до800МиБ), настроенные units/env,
+   резервную копию и совместимость миграций. Endpoint требует Linux root, создаёт private staging
+   и `/var/lib/finassist-deploy/reports/`; credentials сервисов не уходят с VPS.
+   Опубликованные `/opt/finassist`, `releases`, каталоги сервиса/SHA и бинарь получают0755,
+   чтобы systemd DynamicUser мог пройти к executable независимо от private umask endpoint.
+   В этих путях не хранить credentials; staging и новые каталоги отчётов остаются0700, отчёты0600.
+
+### Запуск
+
+Открыть Actions → **Deploy stage** → **Run workflow**, выбрать `main`, `selection` и вставить
+**полный** заполненный JSON по `stage/set.example.json` в `stage_set`. На каждый компонент обязательны
+точные SHA, run_id и run_attempt; `latest`, название ветки и нулевые placeholders не поддерживаются.
+Выбирать run последнего успешного **полного** CI push/main: проверяются итог run и отдельные
+завершённые успешные gates `go`, `lint`, `image` именно указанной попытки. Re-run, начавшийся во время
+скачивания, отклоняется повторной проверкой run; manifest дополнительно фиксирует attempt.
+Историческая попытка после нового re-run не выбирается: нужен актуальный полный успешный attempt.
+Никакой сборки при deploy нет.
+
+`selection=all` выполняет user → analytics → bank-statement-data → fake-llm → assistant → bank-bff.
+Выбор assistant **или** fake-llm всегда выкладывает пару fake-llm → assistant из одного run.
+Остальные значения выбирают один сервис. Всегда скачивается и проверяется весь набор из шести
+артефактов; у пяти Go-сервисов должна совпадать версия `contracts/gen/go`. На VPS невыбранные
+компоненты должны **уже** иметь SHA/run/attempt из этого набора, с проверенным checksum установленного
+бинаря. Поэтому изменение общей версии contracts требует полного набора, а частичный запуск
+не выдаёт согласованный входной JSON за проверенную совместимость с другими установленными версиями.
+До первой миграции проверяются также env всех выбранных сервисов.
+
+GitHub concurrency не отменяет работающий deploy при новом запуске; pending-запуски могут заменяться
+по правилам Actions. VPS держит тот же `/run/finassist-deploy.lock`, что ручной `stage.py`, **на весь набор**,
+включая получение bundle, preflight, миграции и health. Занятый lock завершает запуск ошибкой без deploy.
+Одна операция ограничена30мин на VPS, SSH —2000с, внешний процесс —2200с, job —40мин.
+
+### Отчёт и восстановление
+
+Artifact `stage-deploy-report-RUN_ID-ATTEMPT` хранится30дней и содержит только pins, before/after,
+результат preflight, этапы сервисов и rollback. Бинарь, env, host, ключи, raw SSH/systemd output и
+пользовательские данные не публикуются. На VPS сохраняется root-only JSON
+`/var/lib/finassist-deploy/reports/RUN_ID-ATTEMPT.json`; идентификатор — **run infra**, не сервисного CI.
+Повторная доставка с тем же run/attempt отклоняется, не перезапуская deploy.
+
+При ошибке миграции ссылка остаётся старой. При restart/readiness failure действует существующий
+откат бинаря; `previous-restarted-unverified` означает восстановленную ссылку и успешную команду
+рестарта, **без доказательства readiness** старой версии. `failed` означает ошибку отката; требуется
+проверка оператора. `after` фиксирует checksum-проверенную выбранную ссылкой версию на диске,
+а не независимое доказательство версии уже работающего процесса. Успешный шаг требует readiness.
+БД автоматически не откатывается. После первой ошибки остальные сервисы не выкладываются:
+в многошаговом наборе ранее успешные сервисы остаются обновлёнными. Весь набор не является
+атомарной транзакцией; для восстановления нужен сохранённый согласованный комплект и совместимая схема.
+
+При разрыве SSH, отмене Actions или ошибке транспорта результат удалённой операции может быть
+**неизвестен**. Endpoint игнорирует SSH SIGHUP и сохраняет результат после bounded операции, но авария
+ОС/убийство процесса этого не гарантирует. Не повторять вслепую: сначала дождаться освобождения lock,
+проверить root-only отчёт отдельным административным каналом, installed symlinks и readiness. Начальный
+failed-отчёт без steps может означать прерванный запуск; он не доказывает отсутствие изменений.
+При необходимости использовать предыдущий проверенный set и ручной deploy из раздела выше.
+Файлы отчётов автоматически не удаляются; retention на VPS и закрытое хранение rollback artifacts
+остаются обязанностью оператора. После настройки первый запуск и его runtime-результат фиксируются отдельно.

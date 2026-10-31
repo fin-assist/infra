@@ -98,11 +98,27 @@ def fetch(pins, destination):
         repo = repository(service)
         evidence = json.loads(run(["gh", "api", f"repos/{repo}/actions/runs/{pin['run_id']}"]))
         check_run(service, pin, evidence)
+        jobs = json.loads(run(["gh", "api", "--paginate", "--slurp",
+                               f"repos/{repo}/actions/runs/{pin['run_id']}/attempts/{pin['run_attempt']}/jobs?per_page=100"]))
+        check_jobs(jobs)
         directory = destination / service
         run(["gh", "run", "download", str(pin["run_id"]), "--repo", repo,
              "--name", f"stage-{service}-{pin['sha']}-linux-amd64", "--dir", str(directory)])
         (directory / "run.json").write_text(json.dumps(evidence, indent=2) + "\n")
         verify_artifact(service, pin, directory)
+        # A re-run racing the download invalidates this selection, even with the same SHA.
+        check_run(service, pin, json.loads(run(["gh", "api", f"repos/{repo}/actions/runs/{pin['run_id']}"])))
+
+
+def check_jobs(pages):
+    """Require the three completed full-CI gates from the explicitly pinned attempt."""
+    jobs = [job for page in pages for job in page["jobs"]]
+    for name in ("go", "lint", "image"):
+        matches = [job for job in jobs if job.get("name") == name]
+        if len(matches) != 1 or matches[0].get("conclusion") != "success" or matches[0].get("status") != "completed":
+            raise ValueError("full source CI gates must succeed in the selected attempt")
+    if any(job.get("status") != "completed" or job.get("conclusion") not in ("success", "skipped") for job in jobs):
+        raise ValueError("source CI contains unfinished or unsuccessful jobs")
 
 
 def verify_set(pins, directory):
@@ -124,17 +140,21 @@ def atomic_link(path, target):
 MIGRATION_OVERRIDE_ROOT = Path("/run/systemd/system")
 
 
-def managed_directory(root, *parts):
+def managed_directory(root, *parts, mode=None):
     """Reject symlinks before following any managed writable directory."""
     if root.is_symlink():
         raise ValueError("managed root must not be a symlink")
     root.mkdir(parents=True, exist_ok=True)
     current = root.resolve()
+    if mode is not None:
+        current.chmod(mode)
     for part in parts:
         current = current / part
         if current.is_symlink():
             raise ValueError("managed directory must not be a symlink")
         current.mkdir(exist_ok=True)
+        if mode is not None:
+            current.chmod(mode)
     return current
 
 
@@ -160,11 +180,15 @@ def migrate(service, target):
         run(["systemctl", "daemon-reload"])
 
 
-def deploy(service, pin, directory, root=Path("/opt/finassist")):
+def deploy(service, pin, directory, root=Path("/opt/finassist"), result=None):
     """Install a verified immutable release; never downgrade or roll back the database."""
+    result = result if result is not None else {}
+    result.update(phase="verify", rollback="not-needed")
     manifest = verify_artifact(service, pin, directory)
-    root = managed_directory(root)
-    releases = managed_directory(root, "releases", service)
+    # Published binaries must be traversable by systemd DynamicUser, independent of a private
+    # caller umask. Only these public binary paths are opened; credentials/staging remain private.
+    root = managed_directory(root, mode=0o755)
+    releases = managed_directory(root, "releases", service, mode=0o755)
     target = releases / pin["sha"]
     current = root / service
     if current.exists() and not current.is_symlink():
@@ -187,11 +211,16 @@ def deploy(service, pin, directory, root=Path("/opt/finassist")):
             raise ValueError("installed binary must be a regular file")
         if hashlib.sha256((target / service).read_bytes()).hexdigest() != manifest["binary_sha256"]:
             raise ValueError("immutable release checksum mismatch")
+    target.chmod(0o755)
     if service not in ("bank-bff", "fake-llm"):
+        result["phase"] = "migration"
         migrate(service, target)
+    result["phase"] = "switch"
     atomic_link(current, target)
     try:
+        result["phase"] = "restart"
         run(["systemctl", "restart", service + ".service"])
+        result["phase"] = "readiness"
         # curl retries are bounded and do not print response bodies or credentials.
         if service in HEALTH:
             run(["curl", "--fail", "--silent", "--show-error", "--retry", "20", "--retry-all-errors",
@@ -201,6 +230,7 @@ def deploy(service, pin, directory, root=Path("/opt/finassist")):
             run(["systemctl", "is-active", "--quiet", "fake-llm.service"])
             wait_fake()
     except Exception:
+        result["rollback"] = "failed"
         if previous is not None:
             atomic_link(current, previous)
             cleanup_command = ["systemctl", "restart", service + ".service"]
@@ -210,9 +240,11 @@ def deploy(service, pin, directory, root=Path("/opt/finassist")):
             cleanup_command = ["systemctl", "stop", service + ".service"]
         try:
             run(cleanup_command)
+            result["rollback"] = "previous-restarted-unverified" if previous else "first-release-stopped"
         except Exception as cleanup_error:
             print(f"rollback service operation failed: {cleanup_error}", file=sys.stderr)
         raise
+    result["phase"] = "ready"
     if previous is not None and previous != target:
         history = managed_directory(root, "previous")
         atomic_link(history / service, previous)
