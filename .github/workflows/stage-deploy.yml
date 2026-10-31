@@ -1,0 +1,64 @@
+name: Deploy stage
+run-name: Deploy stage — ${{ inputs.selection }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      selection:
+        description: Service or complete set (assistant includes fake-llm)
+        required: true
+        type: choice
+        options: [all, user, analytics, bank-statement-data, assistant, bank-bff, fake-llm]
+      stage_set:
+        description: Complete six-entry JSON set with exact sha, run_id and run_attempt
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finassist-systemd-stage
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.repository == 'fin-assist/infra'
+    environment: stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify and deploy the pinned set
+        env:
+          GH_TOKEN: ${{ secrets.STAGE_ARTIFACTS_TOKEN }}
+          STAGE_SET_JSON: ${{ inputs.stage_set }}
+          STAGE_SELECTION: ${{ inputs.selection }}
+          STAGE_SSH_HOST: ${{ secrets.STAGE_SSH_HOST }}
+          STAGE_SSH_PORT: ${{ vars.STAGE_SSH_PORT || '22' }}
+          STAGE_SSH_KEY: ${{ secrets.STAGE_SSH_KEY }}
+          STAGE_SSH_KNOWN_HOSTS: ${{ secrets.STAGE_SSH_KNOWN_HOSTS }}
+        run: timeout 2200 python3 scripts/stage_action.py
+      - name: Deployment report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage-deploy-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: stage-deploy-report.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Operator summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          report = json.loads(Path('stage-deploy-report.json').read_text())
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream:
+              stream.write('Stage deployment: **' + report['status'] + '**.\n\n')
+              stream.write('Selected, installed and rollback details: deployment report artifact.\n')
+              stream.write('After transport interruption the remote result may be unknown; inspect the VPS report before retrying.\n')
+          PY

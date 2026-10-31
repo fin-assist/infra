@@ -18,3 +18,12 @@ Report verified problems inline in Russian. Security: provenance of binaries, no
 loopback listeners, trusted proxy IP, TLS, safe filesystem paths and bounded commands, fail-closed deployment.
 Tests: main path and refusals, checksum/source validation, migration-before-restart, health failure and rollback.
 Do not equate prepared config with deployed stage. Financial behaviour belongs in service code.
+
+## Stage deployment automation
+
+FIN-410: `.github/workflows/stage-deploy.yml` is manual/main-only and uses the `stage` Environment.
+`scripts/stage_action.py` fetches the complete pinned set and sends only data to the preinstalled
+`scripts/stage_remote.py` forced SSH command. The endpoint holds the same lock as manual stage.py
+for the entire set, verifies unselected installed identities, and persists a sanitized report.
+Keep the protocol and preinstalled implementation hashes aligned; never deploy or configure secrets
+as a side effect of testing the workflow. See stage/README.md for activation and uncertain SSH outcomes.
