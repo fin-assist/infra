@@ -16,3 +16,8 @@ issues не запускают Claude. Модель — Claude Opus 5.5, effort 
 Workflow начинает работать после merge в `main`; наличие файла не подтверждает успешный запуск.
 Регрессионные тесты этого gate исполняют фактический JavaScript из workflow: для локального
 `python3 -m unittest discover -s scripts -p 'test_*.py'` нужны Python3 и Node.js в PATH; npm-пакеты не требуются.
+
+## Профильное ревью (FIN-421)
+
+Перед ревью применяются [профильные навыки](docs/review-skills/README.md) из проверяемой ревизии.
+Обязательные требования, выбор и ограничения — в `AGENTS.md`, раздел `Code Review Rules`.
