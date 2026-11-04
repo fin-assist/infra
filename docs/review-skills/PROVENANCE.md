@@ -7,8 +7,8 @@
 
 | Навык | Источник / ревизия сравнения | Лицензия |
 | --- | --- | --- |
-| code-review-and-quality | [https://github.com/addyosmani/agent-skills](https://github.com/addyosmani/agent-skills); `301b02b12bff98e4688e6984af6556802322bbde` | MIT; [addyosmani-MIT.txt](licenses/addyosmani-MIT.txt) |
-| security-and-hardening | [https://github.com/addyosmani/agent-skills](https://github.com/addyosmani/agent-skills); `301b02b12bff98e4688e6984af6556802322bbde` | MIT; [addyosmani-MIT.txt](licenses/addyosmani-MIT.txt) |
+| code-review-and-quality | [https://github.com/addyosmani/agent-skills](https://github.com/addyosmani/agent-skills); `301b02b12bff98e4688e6984af6556802322bbde`; через Engineering Suite 1.1.1 | MIT; [addyosmani-MIT.txt](licenses/addyosmani-MIT.txt); [engineering-suite-MIT.txt](licenses/engineering-suite-MIT.txt) |
+| security-and-hardening | [https://github.com/addyosmani/agent-skills](https://github.com/addyosmani/agent-skills); `301b02b12bff98e4688e6984af6556802322bbde`; через Engineering Suite 1.1.1 | MIT; [addyosmani-MIT.txt](licenses/addyosmani-MIT.txt); [engineering-suite-MIT.txt](licenses/engineering-suite-MIT.txt) |
 | cicd-security | [https://github.com/briiirussell/cybersecurity-skills](https://github.com/briiirussell/cybersecurity-skills); `18642b272e9fe57ed6bdf3fd96614915e8a4d71d` | MIT; [briiirussell-MIT.txt](licenses/briiirussell-MIT.txt) |
 | github-actions-validator | [https://github.com/akin-ozer/cc-devops-skills](https://github.com/akin-ozer/cc-devops-skills); `276af751e659315aaf56d3ad13d7c26f4e72e28a` | Apache-2.0; [akin-ozer-Apache-2.0.txt](licenses/akin-ozer-Apache-2.0.txt) |
 | cicd-pipelines | [https://github.com/san-npm/skills-ws](https://github.com/san-npm/skills-ws); `300409ffe7ee7998955a5fd41741c77abb3888da` | MIT; [skills-ws-MIT.txt](licenses/skills-ws-MIT.txt) |
@@ -16,6 +16,11 @@
 | database-observability | [https://codexskills.dev/skills/databases/database-observability/](https://codexskills.dev/skills/databases/database-observability/); `снимок без immutable revision` | MIT declared in SKILL.md; https://codexskills.dev/about/#licensing; [codexskills-MIT.txt](licenses/codexskills-MIT.txt) |
 | connection-pooling | [https://codexskills.dev/skills/databases/connection-pooling/](https://codexskills.dev/skills/databases/connection-pooling/); `снимок без immutable revision` | MIT declared in SKILL.md; https://codexskills.dev/about/#licensing; [codexskills-MIT.txt](licenses/codexskills-MIT.txt) |
 | runbook-generator | [https://github.com/alirezarezvani/claude-skills](https://github.com/alirezarezvani/claude-skills); `c85b17e1fb621ba760478baaacc4fcb9be225e74` | MIT; [alirezarezvani-MIT.txt](licenses/alirezarezvani-MIT.txt) |
+
+Для `code-review-and-quality`, `security-and-hardening` исходные references указывают посредника EngineeringSuite 1.1.1.
+Сохранено [исходное MIT-уведомление Engineering Suite contributors](licenses/engineering-suite-MIT.txt) из [закреплённой копии go-service-template](https://github.com/fin-assist/go-service-template/blob/77491fb876eb124fd9c085deb24a9ff9432e4514/docs/review-skills/licenses/MIT.txt). Цепочка Addy Osmani → Engineering Suite 1.1.1 → установленный снимок отражена в поле
+`intermediary` SNAPSHOT.json. Пакет сейчас не установлен; список `local_differences` означает отличия от
+закреплённого Addy upstream, а не утверждение об авторстве каждого отличия. Исходные reference-тексты не менялись.
 
 У поставленных навыков Codex Skills исходные SKILL.md содержат объявление MIT; отдельная copyright-строка
 в дистрибутиве отсутствует. Разрешение распространения подтверждено [условиями источника](https://codexskills.dev/about/#licensing).
