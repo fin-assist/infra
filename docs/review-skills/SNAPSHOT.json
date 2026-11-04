@@ -1,0 +1,156 @@
+{
+  "snapshot_date": "2026-11-04",
+  "repository": "fin-assist/infra",
+  "skills": {
+    "code-review-and-quality": {
+      "url": "https://github.com/addyosmani/agent-skills",
+      "comparison_revision": "301b02b12bff98e4688e6984af6556802322bbde",
+      "path": "skills/code-review-and-quality",
+      "local_differences": [
+        "SKILL.md",
+        "references/performance-checklist.md",
+        "references/security-checklist.md"
+      ],
+      "license": "MIT",
+      "licenses": [
+        "licenses/addyosmani-MIT.txt"
+      ],
+      "snapshot": "2026-11-04"
+    },
+    "security-and-hardening": {
+      "url": "https://github.com/addyosmani/agent-skills",
+      "comparison_revision": "301b02b12bff98e4688e6984af6556802322bbde",
+      "path": "skills/security-and-hardening",
+      "local_differences": [
+        "SKILL.md",
+        "references/hardening-patterns.md",
+        "references/security-checklist.md"
+      ],
+      "license": "MIT",
+      "licenses": [
+        "licenses/addyosmani-MIT.txt"
+      ],
+      "snapshot": "2026-11-04"
+    },
+    "cicd-security": {
+      "url": "https://github.com/briiirussell/cybersecurity-skills",
+      "comparison_revision": "18642b272e9fe57ed6bdf3fd96614915e8a4d71d",
+      "path": "skills/cicd-security",
+      "local_differences": [],
+      "license": "MIT",
+      "licenses": [
+        "licenses/briiirussell-MIT.txt"
+      ],
+      "snapshot": "2026-11-04"
+    },
+    "github-actions-validator": {
+      "url": "https://github.com/akin-ozer/cc-devops-skills",
+      "comparison_revision": "276af751e659315aaf56d3ad13d7c26f4e72e28a",
+      "path": "devops-skills-plugin/skills/github-actions-validator",
+      "local_differences": [],
+      "license": "Apache-2.0",
+      "licenses": [
+        "licenses/akin-ozer-Apache-2.0.txt"
+      ],
+      "snapshot": "2026-11-04"
+    },
+    "cicd-pipelines": {
+      "url": "https://github.com/san-npm/skills-ws",
+      "comparison_revision": "300409ffe7ee7998955a5fd41741c77abb3888da",
+      "path": "skills/cicd-pipelines",
+      "local_differences": [],
+      "license": "MIT",
+      "licenses": [
+        "licenses/skills-ws-MIT.txt"
+      ],
+      "snapshot": "2026-11-04"
+    },
+    "postgres-backup-restore": {
+      "url": "https://codexskills.dev/skills/databases/postgres-backup-restore/",
+      "ref": null,
+      "adaptation": "Installed snapshot 2026-11-04; no immutable revision supplied by this distribution",
+      "license": "MIT declared in SKILL.md; https://codexskills.dev/about/#licensing"
+    },
+    "database-observability": {
+      "url": "https://codexskills.dev/skills/databases/database-observability/",
+      "ref": null,
+      "adaptation": "Installed snapshot 2026-11-04; no immutable revision supplied by this distribution",
+      "license": "MIT declared in SKILL.md; https://codexskills.dev/about/#licensing"
+    },
+    "connection-pooling": {
+      "url": "https://codexskills.dev/skills/databases/connection-pooling/",
+      "ref": null,
+      "adaptation": "Installed snapshot 2026-11-04; no immutable revision supplied by this distribution",
+      "license": "MIT declared in SKILL.md; https://codexskills.dev/about/#licensing"
+    },
+    "runbook-generator": {
+      "url": "https://github.com/alirezarezvani/claude-skills",
+      "comparison_revision": "c85b17e1fb621ba760478baaacc4fcb9be225e74",
+      "path": "engineering/skills/runbook-generator",
+      "local_differences": [],
+      "license": "MIT",
+      "licenses": [
+        "licenses/alirezarezvani-MIT.txt"
+      ],
+      "snapshot": "2026-11-04"
+    }
+  },
+  "files_sha256": {
+    "docs/review-skills/vendor/code-review-and-quality/LICENSE": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7",
+    "docs/review-skills/vendor/code-review-and-quality/SKILL.md": "89f97f166b08f72750f706a3355d7963cee12b335068efcb4e208f768c89f0f4",
+    "docs/review-skills/vendor/code-review-and-quality/references/performance-checklist.md": "69b3fcdf5d3ae9bf8eb0fd5360c20682640d488c5f4ff9f276e3e2e69fd56883",
+    "docs/review-skills/vendor/code-review-and-quality/references/security-checklist.md": "9fe6bfa63bc598b59c5c8fdb2b2ea2dba92ab633a9ca4afd010eb78519d07474",
+    "docs/review-skills/licenses/addyosmani-MIT.txt": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7",
+    "docs/review-skills/vendor/security-and-hardening/LICENSE": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7",
+    "docs/review-skills/vendor/security-and-hardening/SKILL.md": "600c954bb214edc80eca849e14bfe3c6cfd8d909c5782d85f2a10307fe136736",
+    "docs/review-skills/vendor/security-and-hardening/references/hardening-patterns.md": "d4e6dfdcd2d3bc91e0ad7424362d9fb4260a2a1cb745dac76a88fb10715139f4",
+    "docs/review-skills/vendor/security-and-hardening/references/security-checklist.md": "9fe6bfa63bc598b59c5c8fdb2b2ea2dba92ab633a9ca4afd010eb78519d07474",
+    "docs/review-skills/vendor/cicd-security/SKILL.md": "5e4d82639ed3cefb8e43951fc35537addc502fb5894ade583f1217b1473c71a4",
+    "docs/review-skills/vendor/cicd-security/references/ai-agents-in-ci.md": "4eaeb1c1c5ffdb4fd365425533e35cbc9b108e8ecc2db93e67359d18098c8d45",
+    "docs/review-skills/vendor/cicd-security/references/checks.md": "1939a744e9048597f4851c9698e7ac167e8700fca941d35c21b2169ef0b56c65",
+    "docs/review-skills/vendor/cicd-security/references/findings-format.md": "0f70feb3437c8fab5b10b6d0014326d4a46a66812f8ad7d273ee633486687d40",
+    "docs/review-skills/vendor/cicd-security/references/findings.schema.json": "2f95361c80938400ee8a869d86149aadbf53b665c7cdbd140a662de8c788b77a",
+    "docs/review-skills/vendor/cicd-security/references/gitlab-circleci.md": "96ab508cdfef5dc799bec3126d59cbc2da50d49156a1009b033559bbbe56a50f",
+    "docs/review-skills/vendor/cicd-security/references/severity-calibration.md": "4c60a269d5050b9635839f9b6f792e6c37135370fae9313841f148cdd87d723d",
+    "docs/review-skills/vendor/cicd-security/references/to-sarif.mjs": "70ee7a3d056a60a15b9aebdd654a1e026377a3b19f9c760179dd21845fc0ed5e",
+    "docs/review-skills/vendor/cicd-security/references/validate-findings.mjs": "e26d295f029294905e83ab991b0618be43b0d7b36063e6f8af2c714446f26cd1",
+    "docs/review-skills/vendor/cicd-security/references/verification.md": "62062060314072a4959b8ee307813a95a76d582cccabd9c39f16d7dd2bd0c17e",
+    "docs/review-skills/vendor/cicd-security/references/worked-examples.md": "44f2e8e4f396abd4c0da2fcf08f58dc791455aba4abef9a80ed1a9d7d88dfdeb",
+    "docs/review-skills/licenses/briiirussell-MIT.txt": "951fb9d5201f7d90c61d8ef5d33c75d08bdf2dd4e47cde4760fb465969e9a44d",
+    "docs/review-skills/vendor/github-actions-validator/SKILL.md": "aa9fa15e70ef975eb14dc58f6dcf8dd671a33a585c7d77f70f87565c94d220e0",
+    "docs/review-skills/vendor/github-actions-validator/references/act_usage.md": "e084aac424e4153203ea30c6b76a435ca0ca376491fd82b4606cb29c7440b13f",
+    "docs/review-skills/vendor/github-actions-validator/references/action_versions.md": "3277b776935f2d29a620ff67fdaa233c5a844c2b6333d64a41e6afe0f119327a",
+    "docs/review-skills/vendor/github-actions-validator/references/actionlint_usage.md": "9019ecc43223200b93435422df5b530c10825e62b2a5acd6412b9ff11dcdc195",
+    "docs/review-skills/vendor/github-actions-validator/references/common_errors.md": "200256a62ec58e07221f84bb0af644e4dd775d0a15f2c1284a96afdd8fc74dbd",
+    "docs/review-skills/vendor/github-actions-validator/references/modern_features.md": "cacdf2968f73327fd9dee098d09c480d2dfe8ab85a9c53d2521cf665a73dc838",
+    "docs/review-skills/vendor/github-actions-validator/references/runners.md": "794dde89fa077e6f1e57f28635a1eec3f5321cb6ef0109a6ed1804898078fab9",
+    "docs/review-skills/vendor/github-actions-validator/scripts/install_tools.sh": "831fe16a6773e4c97b6f59132e273ebd38e97cf6cb4549f5d0b4d88e0ab794b2",
+    "docs/review-skills/vendor/github-actions-validator/scripts/validate_workflow.sh": "d1078eb9946e569376550111ba97473ea64ae70b5bea3c58d0400c01bb582e02",
+    "docs/review-skills/licenses/akin-ozer-Apache-2.0.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "docs/review-skills/vendor/cicd-pipelines/SKILL.md": "c2bb61273056b43b096663f9774a3fc5d5326e96a00c9c92a9e05d32d5a281ac",
+    "docs/review-skills/vendor/cicd-pipelines/references/action-version-matrix-july-2026.md": "61a43dd77a24a2f6a1cbaf69a6b4fd4ecf88e6e708b0d2c38b8884a9cf4b5b4e",
+    "docs/review-skills/vendor/cicd-pipelines/references/caching-strategies.md": "d4050180885492c174781f849bff6d6c0c7ac9ff2e06f29802fdd97edecc9176",
+    "docs/review-skills/vendor/cicd-pipelines/references/ci-performance-tips.md": "60247e185b3cd5499357015e4dfedb1bd9bc01ff99b73e0ffbab61a38d418e90",
+    "docs/review-skills/vendor/cicd-pipelines/references/copy-paste-starter-workflows.md": "4cea77b543fc41ac02f5bacf9bd581f39c3380b46d958b2a8acb947a06418226",
+    "docs/review-skills/vendor/cicd-pipelines/references/deployment-strategies.md": "4af447afcf52023487c76c2d22d816138d68ef2640b470e0466abaf962bb4328",
+    "docs/review-skills/vendor/cicd-pipelines/references/docker-multi-stage-build.md": "951df2d24dcc9319b885441e81936979998dfa163ae88730415fcf1680c75871",
+    "docs/review-skills/vendor/cicd-pipelines/references/environment-promotion-dev-staging-prod.md": "4815de512ac399e0a89bc51bb71c75bcde1e08bb4d4baf793b0f66cc1de49d41",
+    "docs/review-skills/vendor/cicd-pipelines/references/github-actions-core-ci-workflow.md": "d881d13f546e622869fae93fd063721fb43179a59d60ac59493ea15734412aa1",
+    "docs/review-skills/vendor/cicd-pipelines/references/monorepo-build-test-only-what-changed.md": "fa88c71907e04a0ff4cc27656d92fb254d465fad0d4c2124c4d9982ff5f3e500",
+    "docs/review-skills/vendor/cicd-pipelines/references/release-automation.md": "00a27c11bc1ce0b70a0372b7a70d06d8edd973a27b4915bf3f4efa0a1a7bccf6",
+    "docs/review-skills/vendor/cicd-pipelines/references/rollback-procedures.md": "ed9399ce131688466a5799e41f39fe4ae4c82bc6986776417332b20246933133",
+    "docs/review-skills/vendor/cicd-pipelines/references/secrets-oidc.md": "59d9d8db985ef063a3d33d5f483752ec50a898e5b86d7b26a0005db7754c70db",
+    "docs/review-skills/vendor/cicd-pipelines/references/status-badges.md": "fe5da1ac18f136c91b3c69d38f6673d479c5614ab472c35e03b223e5132a13f7",
+    "docs/review-skills/vendor/cicd-pipelines/references/supply-chain-baseline-2026.md": "907761f48ee49be0e89f756958212d38ee3b9f86168086e04b18a6f71f33a7ee",
+    "docs/review-skills/licenses/skills-ws-MIT.txt": "05f4aecbaa259385a96709322954a2d7bb413acc77c94e5c13f9b6c246c68ac8",
+    "docs/review-skills/vendor/postgres-backup-restore/SKILL.md": "b666bf7313c99f8e10033bbed441708e25cc9ee87cd56400ded7a7f2aba57eca",
+    "docs/review-skills/licenses/codexskills-MIT.txt": "7efd81f829a3516f5eb48ca98900cc594f9abd6c6280c92f31cb794e82919512",
+    "docs/review-skills/vendor/database-observability/SKILL.md": "7d07bd89184e1a0b478d88ef71eb4186896c44292c49961819caacb91fe1d143",
+    "docs/review-skills/vendor/database-observability/references/diagnostic-queries.md": "233e77e7dd58f3700b8ce73101e0327bc04642f73f0d87053cdf58d81beddeaa",
+    "docs/review-skills/vendor/connection-pooling/SKILL.md": "1717fbe4d5779563009344b5d3e404f23c41af254bd6d7c369821c1e96d69bc0",
+    "docs/review-skills/vendor/runbook-generator/SKILL.md": "7f2300591ca9ef80fb380c9453c2a7ae0500e08ff2a97aa1430eac8322b36ac6",
+    "docs/review-skills/vendor/runbook-generator/references/runbook-templates.md": "5abb8bc37c72236dd7858300faa3b58f1fd3ea6404603b1eac21924e86f69edd",
+    "docs/review-skills/vendor/runbook-generator/scripts/runbook_generator.py": "b7a0105878e5d58a45870d580545606a8d8817b5b514e6c874bf81d73fd3a104",
+    "docs/review-skills/licenses/alirezarezvani-MIT.txt": "a20126646f93d32a8989c3cf4772d59194f405034f7babe7daebeac22b8ab151"
+  }
+}
