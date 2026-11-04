@@ -69,19 +69,28 @@
       "url": "https://codexskills.dev/skills/databases/postgres-backup-restore/",
       "ref": null,
       "adaptation": "Installed snapshot 2026-11-04; no immutable revision supplied by this distribution",
-      "license": "MIT declared in SKILL.md; https://codexskills.dev/about/#licensing"
+      "license": "MIT declared in SKILL.md; https://codexskills.dev/about/#licensing",
+      "licenses": [
+        "licenses/codexskills-MIT.txt"
+      ]
     },
     "database-observability": {
       "url": "https://codexskills.dev/skills/databases/database-observability/",
       "ref": null,
       "adaptation": "Installed snapshot 2026-11-04; no immutable revision supplied by this distribution",
-      "license": "MIT declared in SKILL.md; https://codexskills.dev/about/#licensing"
+      "license": "MIT declared in SKILL.md; https://codexskills.dev/about/#licensing",
+      "licenses": [
+        "licenses/codexskills-MIT.txt"
+      ]
     },
     "connection-pooling": {
       "url": "https://codexskills.dev/skills/databases/connection-pooling/",
       "ref": null,
       "adaptation": "Installed snapshot 2026-11-04; no immutable revision supplied by this distribution",
-      "license": "MIT declared in SKILL.md; https://codexskills.dev/about/#licensing"
+      "license": "MIT declared in SKILL.md; https://codexskills.dev/about/#licensing",
+      "licenses": [
+        "licenses/codexskills-MIT.txt"
+      ]
     },
     "runbook-generator": {
       "url": "https://github.com/alirezarezvani/claude-skills",
