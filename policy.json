@@ -2,5 +2,35 @@
   "baseBranchPatterns": [
     "main"
   ],
-  "packageRules": []
+  "packageRules": [
+    {
+      "description": "FIN-211: recovery of an automatically failed dependency family",
+      "matchPackageNames": [
+        "renovate"
+      ],
+      "matchDatasources": [
+        "npm"
+      ],
+      "recreateWhen": "always",
+      "matchJsonata": [
+        "newMajor = 44"
+      ]
+    },
+    {
+      "description": "FIN-211: failed twice; retry explicitly in Dependency Dashboard",
+      "matchPackageNames": [
+        "renovate"
+      ],
+      "matchDatasources": [
+        "npm"
+      ],
+      "dependencyDashboardApproval": true,
+      "recreateWhen": "never",
+      "groupName": null,
+      "additionalBranchPrefix": "fin211-retry-14-",
+      "matchJsonata": [
+        "newDigest = \"sha512-dSbifWgLlNjMkCJImQgl0yB01W8ROne7BMIiZYJv707DWpPOReJqxQjINcX8Df7KUhzxSu0IUpV5G4sKbwND0A==\""
+      ]
+    }
+  ]
 }
