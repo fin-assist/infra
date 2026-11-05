@@ -25,7 +25,9 @@ required job `stage`. Это проверка конфигурации, **не**
 ручной запуск — из trusted main. Секреты и Environment `stage` контроллеру не передаются.
 Без `ciWorkflow` общий runtime сохраняет прежний default `ci.yml`.
 
-Нужны завершённые успешные обязательные jobs текущего head SHA, плюс все дополнительные native
+Runtime требует явную привязку каждого configured required check к GitHub Actions App15368,
+без дубликатов того же context и без force-push/delete на целевой ветке. Нужны завершённые
+успешные обязательные jobs текущего head SHA, плюс все дополнительные native
 required checks/statuses. Отсутствующие, pending, skipped, cancelled и конфликт блокируют merge.
 Проверки разных workflow и попыток не подменяют друг друга. Ошибка одного PR не скрывает остальные:
 контроллер продолжает сверку и завершает run ошибкой с номерами проблемных PR без секретов.
@@ -54,6 +56,9 @@ Environment ограничивает controller job, но organization secret д
 авторство, SHA, attempt и цель. Подтверждённый повторный failure закрывает полностью ботский PR
 с одним пояснением: SHA, упавшие checks, ссылки, результат повтора и способ повторить обновление.
 Pending/skipped/cancelled/отсутствующий CI, конфликт или человеческие коммиты не дают автозакрытие.
+Неизвестная mergeability и конфликт блокируют также retry claims и записи quarantine;
+mergeability сверяется при входе и перед действиями с актуальным PR. Состояние blocked из-за
+красного required CI само по себе не является конфликтом и сохраняет один разрешённый retry.
 Неизвестный результат dispatch сохраняет расходованный бюджет и требует проверки Actions владельцем.
 
 После закрытия generated `policy.json` требует Dashboard approval для точного failed значения/digest.
