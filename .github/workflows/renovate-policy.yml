@@ -1,0 +1,60 @@
+name: Renovate policy controller
+on:
+  workflow_run:
+    workflows: [Stage configuration, Renovate policy tests]
+    types: [completed]
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  checks: read
+concurrency:
+  group: renovate-policy-controller
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: github.ref == 'refs/heads/main'
+    permissions: {}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      enabled: ${{ steps.activation.outputs.enabled }}
+    steps:
+      - name: Check exact activation value
+        id: activation
+        env:
+          RENOVATE_POLICY_ENABLED: ${{ vars.RENOVATE_POLICY_ENABLED }}
+        shell: bash
+        # Actions string equality ignores case. Shell equality keeps TRUE/True
+        # outside the privileged environment; only canonical outputs leave here.
+        run: |
+          if [ "$RENOVATE_POLICY_ENABLED" = true ]; then
+            printf 'enabled=true\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'enabled=false\n' >> "$GITHUB_OUTPUT"
+          fi
+
+  reconcile:
+    needs: gate
+    # The unprivileged gate emits only literal true/false, never the raw variable.
+    if: github.ref == 'refs/heads/main' && needs.gate.outputs.enabled == 'true'
+    environment: renovate-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Always execute reviewed code from the default branch. Never checkout a PR
+      # or download artifacts/caches produced by an untrusted CI run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.15'
+      - name: Reconcile Renovate PRs
+        env:
+          RENOVATE_POLICY_ENABLED: ${{ vars.RENOVATE_POLICY_ENABLED }}
+          GITHUB_READ_TOKEN: ${{ github.token }}
+          RENOVATE_POLICY_TOKEN: ${{ secrets.RENOVATE_POLICY_TOKEN }}
+        run: timeout 540s python3 scripts/renovate_policy.py

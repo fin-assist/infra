@@ -1,0 +1,12 @@
+{
+  "requiredChecks": [
+    "stage",
+    "Renovate policy tests",
+    "Renovate runtime contract"
+  ],
+  "controllerLogin": "avtomon",
+  "ciChecks": [
+    "stage"
+  ],
+  "ciWorkflow": "stage.yml"
+}
