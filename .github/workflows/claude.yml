@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Check live PR origin without checkout
         id: origin
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             core.setOutput('allowed', 'false');
