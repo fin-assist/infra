@@ -100,3 +100,16 @@ Review Security and Tests separately and report verified findings inline in Russ
 Activation requires the Claude GitHub App and an accessible `CLAUDE_CODE_OAUTH_TOKEN` secret.
 Comment-triggered workflows run from the default branch: request Claude only after the workflow
 exists in main. Review jobs never reference the stage Environment or receive its deploy credentials.
+
+## Renovate policy (FIN-447)
+
+`docs/renovate-policy.md` describes the shared FIN-211 controller, own config-only presets and activation.
+`.github/renovate-policy.json` selects `ciWorkflow: stage.yml`, job `stage`, plus both policy checks;
+this is configuration validation, never `stage-deploy.yml`. Preserve stage/deploy token boundaries.
+The controller checks exact-lowercase activation before entering the privileged Environment and executes
+only trusted main code. Signed Renovate metadata, current SHA/run/attempt, selected target and strict
+owner-only protections are mandatory; no manual merge or bypass masquerades as automation.
+Keep lifecycle/CLI/gate tests and both real pinned-runtime fixtures; run them with process timeouts.
+Bootstrap, branch protection, secret scope and activation remain separate owner operations.
+Only the verified and separately activated FIN-211 controller may merge eligible dependency PRs;
+ordinary PRs and release PRs still require the owner's explicit merge command.
